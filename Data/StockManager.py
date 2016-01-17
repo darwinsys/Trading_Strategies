@@ -132,11 +132,16 @@ class BatchJobManager:
 
         self._mongo_conn = mongo_conn
 
-    def add_stockprice_job(self, codes, start, end):
+    def get_stockprice_collection(self):
         db = self._mongo_conn[self._mongo_db]
         coll = db[self._mongo_coll_stockdaily]
+        return db, coll
+
+    def add_stockprice_job(self, codes, action, start, end):
+        db, coll = self.get_stockprice_collection()
 
         jobs = pd.DataFrame(codes)
+        jobs['action'] = 'load'
         jobs['start'] = start
         jobs['end'] = end
         jobs['status'] = 0
@@ -144,14 +149,7 @@ class BatchJobManager:
         records = json.loads(jobs.T.to_json()).values()
         coll.insert(records)
 
-
-dbmgr = DBManager.Manager()
-mongo_conn = dbmgr.get_default_mongo_conn()
-
-stockmgr = StockManager()
-jobMgr = BatchJobManager(dbmgr.get_default_mongo_conn())
-
-mysql_uri = dbmgr.get_default_mysql_conn()
-codes = stockmgr.get_all_stock_codes(mysql_uri)
-
-jobMgr.add_stockprice_job(codes, '2010-01-01', '2016-01-01')
+    def process_stockprice_job(self):
+        db, coll = self.get_stockprice_collection()
+        jobs = coll.find({'status': 0})
+        return jobs
