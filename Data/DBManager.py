@@ -3,7 +3,7 @@ import blaze
 import pymongo
 
 
-class dbManager:
+class Manager:
     def __init__(self):
         self.mysql_db = None
         self.mysql_uri = None
@@ -16,6 +16,14 @@ class dbManager:
 
         self.mysqlb_uri = None
         self.mongo_db = None
+
+        self._default_mongo_conn = None
+        self._default_mongo_host = '188.166.179.144'
+        self._default_mongo_port = 27017
+
+        self._default_mysql_uri = "mysql+mysqlconnector://darwin:darwinlab@188.166.179.144:3306/darwindb"
+        self._default_mysql_host = '188.166.179.144'
+        self._default_mysql_port = 3306
 
     def set_mysql_conn(self, hostname, username, password, db):
         self.mysql_hostname = hostname
@@ -41,3 +49,16 @@ class dbManager:
         except:
             print 'failed'
         return mongo_db
+
+    def get_default_mongo_conn(self):
+        if self._default_mongo_conn == None:
+            try:
+                self._default_mongo_conn = pymongo.MongoClient(self._default_mongo_host, self._default_mongo_port)
+                print 'success'
+            except:
+                print 'failed'
+
+        return self._default_mongo_conn
+
+    def get_default_mysql_conn(self):
+        return self._default_mysql_uri

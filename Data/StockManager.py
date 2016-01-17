@@ -1,11 +1,19 @@
+import json
+
 import blaze
 import odo
+import pandas as pd
 import tushare as ts
+
+import DBManager
 
 
 class StockManager:
-    def __init__(self, mysql_uri):
-        self.mysql_uri = mysql_uri
+    def __init__(self):
+        pass
+        # self.mysql_uri = mysql_uri
+
+
 
     # downloading stock related data from Tushare
     def download_stock_info(self):
@@ -34,9 +42,26 @@ class StockManager:
         stock_area.columns = ['code', 'location']
         return stock_area
 
+    def download_stock_hist_price(self, codes, start, end):
+        prices = pd.DataFrame()
+        for code in codes:
+            print "downloading " + code
+            price = ts.get_h_data(code, start, end)
+            prices = pd.concat([prices, price])
+        return prices
+
+    def download_stock_latest_price(self, codes):
+        prices = pd.DataFrame()
+        for code in codes:
+            print "downloading " + code
+            price = ts.get_h_data(code)
+            prices = pd.concat(prices, price)
+        return prices
+
+
     # this functon will merge all the stock information toegether
     # and create a total stock info table
-    def get_total_stock_info(self):
+    def download_total_stock_info(self):
         ### download stock infomration
         print "downloading stock basic info:"
         stock_info = self.download_stock_info()
@@ -74,9 +99,59 @@ class StockManager:
         bl_stock_info = blaze.Data(stock_info.reset_index())
         odo.odo(bl_stock_info, stock_info_uri)
 
-    def get_stock_daily_prices(self, codes, field):
-        stock_price_uri = self.mysql_uri + "::Stock_Price_Daily_tmp"
-        bl_stock_price = blaze.Data(stock_price_uri)
+    def load_stock_latest_price_db(self, codes, table_stock_price):
+        stock_price_uri = self.mysql_uri + "::" + table_stock_price
+        stock_price = self.download_stock_latest_price(codes)
+        bl_stock_price = blaze.Data(stock_price.reset_index())
+        odo.odo(bl_stock_price, stock_price_uri)
 
-        for code in codes:
-            bl_stock_price[bl_stock_price['code'] == code]
+    def load_stock_hist_price_db(self, codes, start, end, table_stock_price):
+        stock_price_uri = self.mysql_uri + "::" + table_stock_price
+        stock_price = self.download_stock_hist_price(codes, start, end)
+        bl_stock_price = blaze.Data(stock_price.reset_index())
+        odo.odo(bl_stock_price, stock_price_uri)
+
+    def get_all_stock_codes(self, db_uri):
+        stock_info_uri = db_uri + "::Stock_Info"
+        pd_codes = odo.odo(blaze.Data(stock_info_uri).code, pd.DataFrame)
+        return pd_codes
+
+    def batchjob_load_all_stock_histprice_db(self, start, end, db_uri, log_dir):
+        codes = self.get_all_stock_codes(db_uri)
+
+        ## loading the task entris into mongo db
+        mongo_db = DBManager.Manager().get_default_mongo_conn()
+
+        ## batch job db in mongo
+
+
+class BatchJobManager:
+    def __init__(self, mongo_conn):
+        self._mongo_db = 'darwin_lab'
+        self._mongo_coll_stockdaily = 'Batchjobs_Stock_Daily_Price'
+
+        self._mongo_conn = mongo_conn
+
+    def add_stockprice_job(self, codes, start, end):
+        db = self._mongo_conn[self._mongo_db]
+        coll = db[self._mongo_coll_stockdaily]
+
+        jobs = pd.DataFrame(codes)
+        jobs['start'] = start
+        jobs['end'] = end
+        jobs['status'] = 0
+
+        records = json.loads(jobs.T.to_json()).values()
+        coll.insert(records)
+
+
+dbmgr = DBManager.Manager()
+mongo_conn = dbmgr.get_default_mongo_conn()
+
+stockmgr = StockManager()
+jobMgr = BatchJobManager(dbmgr.get_default_mongo_conn())
+
+mysql_uri = dbmgr.get_default_mysql_conn()
+codes = stockmgr.get_all_stock_codes(mysql_uri)
+
+jobMgr.add_stockprice_job(codes, '2010-01-01', '2016-01-01')
