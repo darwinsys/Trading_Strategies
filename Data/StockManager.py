@@ -5,14 +5,77 @@ import odo
 import pandas as pd
 import tushare as ts
 
-import DBManager
+import pymongo
+
+
+class DBManager:
+    def __init__(self):
+        self.mysql_db = None
+        self.mysql_uri = None
+
+        self.mysql_hostname = None
+        self.mysql_username = None
+        self.mysql_password = None
+        self.mysql_port_default = 3306
+        self.mysql_database = None
+
+        self.mysqlb_uri = None
+        self.mongo_db = None
+
+        self._default_mongo_conn = None
+        self._default_mongo_host = '188.166.179.144'
+        self._default_mongo_port = 27017
+
+        self._default_mysql_uri = "mysql+mysqlconnector://darwin:darwinlab@188.166.179.144:3306/darwindb"
+        self._default_mysql_host = '188.166.179.144'
+        self._default_mysql_port = 3306
+
+    def set_mysql_conn(self, hostname, username, password, db):
+        self.mysql_hostname = hostname
+        self.mysql_password = password
+        self.mysql_username = username
+        self.mysql_database = db
+
+        self.mysql_uri = "mysql+mysqlconnector://" + self.mysql_username + ":" \
+                         + self.mysql_password + "@" + self.mysql_hostname + ":" \
+                         + str(self.mysql_port_default) + "/" + self.mysql_database
+        return self.mysql_uri
+
+    def get_mysql_conn(self, hostname, username, password, db):
+        # init DB
+        print mysql_uri
+        self.mysql_db = blaze.Data(mysql_uri)
+        return mysql_uri, self.mysql_db
+
+    def get_mongo_conn(self, mongo_host, mongo_port):
+        try:
+            mongo_db = pymongo.MongoClient(mongo_host, mongo_port)
+            print 'success'
+        except:
+            print 'failed'
+        return mongo_db
+
+    def get_default_mongo_conn(self):
+        if self._default_mongo_conn == None:
+            try:
+                self._default_mongo_conn = pymongo.MongoClient(self._default_mongo_host, self._default_mongo_port)
+                print 'success'
+            except:
+                print 'failed'
+
+        return self._default_mongo_conn
+
+    def get_default_mysql_conn(self):
+        return self._default_mysql_uri
+
+
 
 
 class StockManager:
     def __init__(self):
-        pass
-        # self.mysql_uri = mysql_uri
-
+        self._db_manager = DBManager()
+        self._default_mysql_stockinfo_table = "Stock_Info"
+        self._default_mysql_stockprice_daily_table = "Stock_Price_Daily_tmp"
 
 
     # downloading stock related data from Tushare
@@ -92,52 +155,49 @@ class StockManager:
 
         return stock_total_info
 
-    def load_stockinfo_db(self, table_stock_info):
-        stock_info_uri = self.mysql_uri + "::" + table_stock_info
-        stock_info = self.get_total_stock_info()
+    def load_stock_info_db(self):
+        stock_info_uri = self._db_manager.get_default_mysql_conn() + "::" + self._default_mysql_stockinfo_table
+        stock_info = self.download_total_stock_info()
 
         bl_stock_info = blaze.Data(stock_info.reset_index())
         odo.odo(bl_stock_info, stock_info_uri)
 
-    def load_stock_latest_price_db(self, codes, table_stock_price):
-        stock_price_uri = self.mysql_uri + "::" + table_stock_price
+    def load_stock_latest_price_db(self, codes):
+        stock_price_uri = self._db_manager.get_default_mysql_conn() + "::" + self._default_mysql_stockprice_daily_table
         stock_price = self.download_stock_latest_price(codes)
         bl_stock_price = blaze.Data(stock_price.reset_index())
         odo.odo(bl_stock_price, stock_price_uri)
 
-    def load_stock_hist_price_db(self, codes, start, end, table_stock_price):
-        stock_price_uri = self.mysql_uri + "::" + table_stock_price
+    def load_stock_hist_price_db(self, codes, start, end):
+        stock_price_uri = self._db_manager.get_default_mysql_conn() + "::" + self._default_mysql_stockprice_daily_table
         stock_price = self.download_stock_hist_price(codes, start, end)
         bl_stock_price = blaze.Data(stock_price.reset_index())
         odo.odo(bl_stock_price, stock_price_uri)
 
-    def get_all_stock_codes(self, db_uri):
-        stock_info_uri = db_uri + "::Stock_Info"
+    def get_all_stock_codes(self):
+        stock_info_uri = self._db_manager.get_default_mysql_conn() + "::" + self._default_mysql_stockinfo_table
         pd_codes = odo.odo(blaze.Data(stock_info_uri).code, pd.DataFrame)
         return pd_codes
 
-    def batchjob_load_all_stock_histprice_db(self, start, end, db_uri, log_dir):
-        codes = self.get_all_stock_codes(db_uri)
 
-        ## loading the task entris into mongo db
-        mongo_db = DBManager.Manager().get_default_mongo_conn()
-
-        ## batch job db in mongo
 
 
 class BatchJobManager:
-    def __init__(self, mongo_conn):
-        self._mongo_db = 'darwin_lab'
-        self._mongo_coll_stockdaily = 'Batchjobs_Stock_Daily_Price'
+    def __init__(self):
+        self._db_manager = DBManager()
+        self._stock_manager = StockManager()
 
-        self._mongo_conn = mongo_conn
+        self._mongo_conn = self._db_manager.get_default_mongo_conn()
+        self._mongo_db = 'darwin_lab'
+        self._mongo_coll_job_stockdaily = 'Batchjobs_Stock_Daily_Price'
+
 
     def get_stockprice_collection(self):
         db = self._mongo_conn[self._mongo_db]
-        coll = db[self._mongo_coll_stockdaily]
+        coll = db[self._mongo_coll_job_stockdaily]
         return db, coll
 
-    def add_stockprice_job(self, codes, action, start, end):
+    def add_job_download_stock_daily_price(self, codes, action, start, end):
         db, coll = self.get_stockprice_collection()
 
         jobs = pd.DataFrame(codes)
@@ -149,7 +209,28 @@ class BatchJobManager:
         records = json.loads(jobs.T.to_json()).values()
         coll.insert(records)
 
-    def process_stockprice_job(self):
+    def update_job_download_stock_daily_price(self, job_id, status):
+        db, coll = self.get_stockprice_collection()
+        coll.find({"id":job_id}, {"$set": {"status": status}})
+
+
+    def process_job_download_stock_daily_price(self):
         db, coll = self.get_stockprice_collection()
         jobs = coll.find({'status': 0})
-        return jobs
+        for job in jobs :
+            jobid = job["_id"]
+            code = job["code"]
+            start = job["start"]
+            end = job["end"]
+
+            try :
+                print "----------------------------\n"
+                print "loading " + code +"\n"
+                self._stock_manager.load_stock_hist_price_db(code, start, end)
+                print "success "
+                self.update_job_download_stock_daily_price(jobid, 1)
+            except :
+                print "failed "
+                self.update_job_download_stock_daily_price(jobid, 2)
+
+
