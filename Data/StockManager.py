@@ -188,17 +188,19 @@ class BatchJobManager:
         self._stock_manager = StockManager()
 
         self._mongo_conn = self._db_manager.get_default_mongo_conn()
-        self._mongo_db = 'darwin_lab'
-        self._mongo_coll_job_stockdaily = 'Batchjobs_Stock_Daily_Price'
+        self._mongo_db_table = 'darwin_lab'
+        self._mongo_coll_job_stockdaily_table =
+
+        self._mongo_db =  self._mongo_conn[self._mongo_db_table]
+        self._mongo_coll = self._mongo_db[self._mongo_coll_job_stockdaily_table]
+        
 
 
-    def get_stockprice_collection(self):
-        db = self._mongo_conn[self._mongo_db]
-        coll = db[self._mongo_coll_job_stockdaily]
-        return db, coll
+    def add_job_download_all_stock_daily_price(self, start, end):
+        codes = self._stock_manager.get_all_stock_codes()
+        self.add_job_download_stock_daily_price(codes, start, end)
 
-    def add_job_download_stock_daily_price(self, codes, action, start, end):
-        db, coll = self.get_stockprice_collection()
+    def add_job_download_stock_daily_price(self, codes, start, end):
 
         jobs = pd.DataFrame(codes)
         jobs['action'] = 'load'
@@ -207,16 +209,14 @@ class BatchJobManager:
         jobs['status'] = 0
 
         records = json.loads(jobs.T.to_json()).values()
-        coll.insert(records)
+        self._mongo_coll.insert(records)
 
     def update_job_download_stock_daily_price(self, job_id, status):
-        db, coll = self.get_stockprice_collection()
-        coll.find({"id":job_id}, {"$set": {"status": status}})
+        self._mongo_coll.find({"id":job_id}, {"$set": {"status": status}})
 
 
     def process_job_download_stock_daily_price(self):
-        db, coll = self.get_stockprice_collection()
-        jobs = coll.find({'status': 0})
+        jobs = self._mongo_coll.find({'status': 0})
         for job in jobs :
             jobid = job["_id"]
             code = job["code"]
