@@ -212,7 +212,7 @@ class BatchJobManager:
         self._mongo_coll.insert(records)
 
     def update_job_download_stock_daily_price(self, job_id, status):
-        self._mongo_coll.find({"id":job_id}, {"$set": {"status": status}})
+        self._mongo_coll.update({"id":job_id}, {"$set": {"status": status}})
 
 
     def process_job_download_stock_daily_price(self):
