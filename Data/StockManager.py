@@ -202,7 +202,7 @@ class BatchJobManager:
 
     def add_job_download_stock_daily_price(self, codes, start, end):
 
-        jobs = pd.DataFrame(codes)
+        jobs = pd.DataFrame(codes, columns=['code'])
         jobs['action'] = 'load'
         jobs['start'] = start
         jobs['end'] = end
