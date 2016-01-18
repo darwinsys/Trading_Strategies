@@ -189,11 +189,11 @@ class BatchJobManager:
 
         self._mongo_conn = self._db_manager.get_default_mongo_conn()
         self._mongo_db_table = 'darwin_lab'
-        self._mongo_coll_job_stockdaily_table =
+        self._mongo_coll_job_stockdaily_table = 'BatchJobs_Stock_Daily_Price'
 
         self._mongo_db =  self._mongo_conn[self._mongo_db_table]
         self._mongo_coll = self._mongo_db[self._mongo_coll_job_stockdaily_table]
-        
+
 
 
     def add_job_download_all_stock_daily_price(self, start, end):
