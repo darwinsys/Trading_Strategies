@@ -195,7 +195,7 @@ class BatchJobManager:
         jobs['start'] = start
         jobs['end'] = end
         jobs['status'] = 0
-        jobs = jobs.reset_index()
+        jobs = jobs.set_index('code')
         records = json.loads(jobs.T.to_json()).values()
         self._mongo_coll.insert(records)
         print jobs
