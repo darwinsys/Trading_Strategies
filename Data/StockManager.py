@@ -202,11 +202,15 @@ class BatchJobManager:
         print jobs
 
     def update_job_download_stock_daily_price(self, job_id, status):
-        self._mongo_coll.find_one_and_update({"_id":job_id}, {"$set": {"status": status}})
+        for job_id in job_id_list :
+            self._mongo_coll.find_one_and_update({"_id":job_id}, {"$set": {"status": status}})
+
 
 
     def process_job_download_stock_daily_price(self):
         jobs = self._mongo_coll.find({'status': 0})
+        success_jobids = []
+        failure_jobids = []
         for job in jobs :
             jobid = job["_id"]
             code = job["code"]
@@ -218,10 +222,14 @@ class BatchJobManager:
                 print "loading " + code +"\n"
                 self._stock_manager.load_stock_hist_price_db(code, start, end)
                 print "success "
-                self.update_job_download_stock_daily_price(jobid, 1)
+                success_jobids.append(jobid)
+                #self.update_job_download_stock_daily_price(jobid, 1)
             except :
                 print "failed "
-                self.update_job_download_stock_daily_price(jobid, 2)
+                failure_jobids.append(jobid)
+                #self.update_job_download_stock_daily_price(jobid, 2)
+        self.update_job_download_stock_daily_price(success_jobids, 1)
+        self.update_job_download_stock_daily_price(failure_jobids, 2)
 
 
 '''
