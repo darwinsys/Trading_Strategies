@@ -190,12 +190,13 @@ class BatchJobManager:
 
     def add_job_download_stock_daily_price(self, codes, start, end):
 
-        jobs = pd.DataFrame(codes, columns=['code'])
+        jobs = pd.DataFrame()
+        jobs['code'] = codes
         jobs['action'] = 'load'
         jobs['start'] = start
         jobs['end'] = end
         jobs['status'] = 0
-        jobs = jobs.set_index('code')
+        #jobs = jobs.set_index('code')
         records = json.loads(jobs.T.to_json()).values()
         self._mongo_coll.insert(records)
         print jobs
@@ -225,7 +226,7 @@ class BatchJobManager:
 
 '''
 jobmgr = BatchJobManager()
-#jobs = jobmgr.add_job_download_stock_daily_price(['000009'],'2015-12-31', '2016-01-19')
+jobs = jobmgr.add_job_download_stock_daily_price(['000009'],'2015-12-31', '2016-01-19')
 #jobmgr.process_job_download_stock_daily_price()
 jobs = jobmgr._mongo_coll.find({'status':0})
 for job in jobs :
@@ -235,4 +236,4 @@ for job in jobs :
     if jobid == samejob["_id"] :
         print "find the same one"
         jobmgr._mongo_coll.find_one_and_update({'_id':jobid}, {'$set': {'status': 1}})
-        '''
+'''
