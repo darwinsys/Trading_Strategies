@@ -41,25 +41,12 @@ class DBManager:
                          + str(self.mysql_port_default) + "/" + self.mysql_database
         return self.mysql_uri
 
-    def get_mysql_conn(self, hostname, username, password, db):
-        # init DB
-        print mysql_uri
-        self.mysql_db = blaze.Data(mysql_uri)
-        return mysql_uri, self.mysql_db
-
-    def get_mongo_conn(self, mongo_host, mongo_port):
-        try:
-            mongo_db = pymongo.MongoClient(mongo_host, mongo_port)
-            print 'success'
-        except:
-            print 'failed'
-        return mongo_db
 
     def get_default_mongo_conn(self):
         if self._default_mongo_conn == None:
             try:
                 self._default_mongo_conn = pymongo.MongoClient(self._default_mongo_host, self._default_mongo_port)
-                print 'success'
+                print 'successfully build the connection'
             except:
                 print 'failed'
 
@@ -181,6 +168,7 @@ class StockManager:
 
 
 
+from bson.objectid import ObjectId
 
 class BatchJobManager:
     def __init__(self):
@@ -210,9 +198,10 @@ class BatchJobManager:
 
         records = json.loads(jobs.T.to_json()).values()
         self._mongo_coll.insert(records)
+        print jobs
 
     def update_job_download_stock_daily_price(self, job_id, status):
-        self._mongo_coll.update({"id":job_id}, {"$set": {"status": status}})
+        self._mongo_coll.find_one_and_update({"_id":job_id}, {"$set": {"status": status}})
 
 
     def process_job_download_stock_daily_price(self):
@@ -234,3 +223,16 @@ class BatchJobManager:
                 self.update_job_download_stock_daily_price(jobid, 2)
 
 
+'''
+jobmgr = BatchJobManager()
+#jobs = jobmgr.add_job_download_stock_daily_price(['000009'],'2015-12-31', '2016-01-19')
+#jobmgr.process_job_download_stock_daily_price()
+jobs = jobmgr._mongo_coll.find({'status':0})
+for job in jobs :
+    jobid = job["_id"]
+    samejob = jobmgr._mongo_coll.find_one({'_id':jobid})
+    print jobid
+    if jobid == samejob["_id"] :
+        print "find the same one"
+        jobmgr._mongo_coll.find_one_and_update({'_id':jobid}, {'$set': {'status': 1}})
+        '''
