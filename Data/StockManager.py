@@ -211,30 +211,33 @@ class BatchJobManager:
         has_jobs = True
         while has_jobs :
             jobs = self._mongo_coll.find_one({'status': 0})
+
             if jobs.count() == 0:
                 print "no more job to process!"
                 return
+            else :
+                print "still " + str(jobs.count()) + " jobs to go!"
 
-            executed = 0
-            for job in jobs :
-                jobid = job["_id"]
-                code = job["code"]
-                start = job["start"]
-                end = job["end"]
+                executed = 0
+                for job in jobs :
+                    jobid = job["_id"]
+                    code = job["code"]
+                    start = job["start"]
+                    end = job["end"]
 
-                try :
-                    print "----------------------------\n"
-                    print "loading " + code +"\n"
-                    self._stock_manager.load_stock_hist_price_db(code, start, end)
-                    print "success "
-                    executed = 1
-                    #self.update_job_download_stock_daily_price(jobid, 1)
-                except :
-                    print "failed "
-                    #failure_jobids.append(jobid)
-                    executed = 2
-                    #self.update_job_download_stock_daily_price(jobid, 2)
-            self.update_job_download_stock_daily_price(jobid, executed)
+                    try :
+                        print "----------------------------\n"
+                        print "loading " + code +"\n"
+                        self._stock_manager.load_stock_hist_price_db(code, start, end)
+                        print "success "
+                        executed = 1
+                        #self.update_job_download_stock_daily_price(jobid, 1)
+                    except :
+                        print "failed "
+                        #failure_jobids.append(jobid)
+                        executed = 2
+                        #self.update_job_download_stock_daily_price(jobid, 2)
+                self.update_job_download_stock_daily_price(jobid, executed)
 
 
 '''
