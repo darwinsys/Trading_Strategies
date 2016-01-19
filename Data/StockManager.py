@@ -215,29 +215,29 @@ class BatchJobManager:
                 print "no more job to process!"
                 return
             else :
-                executed = 0
-                for job in jobs :
-                    jobid = job["_id"]
-                    code = job["code"]
-                    start = job["start"]
-                    end = job["end"]
+                jobid = jobs["_id"]
+                code = jobs["code"]
+                start = jobs["start"]
+                end = jobs["end"]
 
-                    try :
-                        print "----------------------------\n"
-                        print "loading " + code +"\n"
-                        self._stock_manager.load_stock_hist_price_db(code, start, end)
-                        print "success "
-                        executed = 1
-                        #self.update_job_download_stock_daily_price(jobid, 1)
-                    except :
-                        print "failed "
-                        #failure_jobids.append(jobid)
-                        executed = 2
-                        #self.update_job_download_stock_daily_price(jobid, 2)
-                self.update_job_download_stock_daily_price(jobid, executed)
+                try :
+                    print "----------------------------\n"
+                    print "loading " + code +"\n"
+                    self._stock_manager.load_stock_hist_price_db(code, start, end)
+                    print "success "
+                    executed = 1
+                    self.update_job_download_stock_daily_price(jobid, 1)
+                except :
+                    print "failed "
+                    #failure_jobids.append(jobid)
+                    executed = 2
+                    self.update_job_download_stock_daily_price(jobid, 2)
 
 '''
 jobmgr = BatchJobManager()
+job = jobmgr._mongo_coll.find_one({'status':0})
+print job['_id']
+
 jobs = jobmgr.add_job_download_stock_daily_price(['000009'],'2015-12-31', '2016-01-19')
 #jobmgr.process_job_download_stock_daily_price()
 jobs = jobmgr._mongo_coll.find({'status':0})
