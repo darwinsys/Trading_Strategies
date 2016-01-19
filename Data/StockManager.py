@@ -208,16 +208,13 @@ class BatchJobManager:
 
 
     def process_job_download_stock_daily_price(self):
-        has_jobs = True
-        while has_jobs :
+        while True :
             jobs = self._mongo_coll.find_one({'status': 0})
 
-            if jobs.count() == 0:
+            if jobs  == None:
                 print "no more job to process!"
                 return
             else :
-                print "still " + str(jobs.count()) + " jobs to go!"
-
                 executed = 0
                 for job in jobs :
                     jobid = job["_id"]
@@ -238,7 +235,6 @@ class BatchJobManager:
                         executed = 2
                         #self.update_job_download_stock_daily_price(jobid, 2)
                 self.update_job_download_stock_daily_price(jobid, executed)
-
 
 '''
 jobmgr = BatchJobManager()
