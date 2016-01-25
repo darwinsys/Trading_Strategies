@@ -8,6 +8,48 @@ import tushare as ts
 import pymongo
 
 
+class Settings:
+    _local_mongo_collection_batch_job_stock_daily_price = "BatchJobs_Stock_Price_Daily"
+    _local_mongo_collection_stock_daily_price = "Stock_Price_Daily"
+    _local_mongo_collection_stock_daily_price_tmp = "Stock_Price_Daily_tmp"
+    _local_mongo_collection_stock_info = "Stock_info"
+
+    def __init__(self):
+        self._local_mongo_conn = None
+        self._local_mongo_hostname = 'localhost'
+        self._local_mongo_port = 27017
+        self._local_mongo_conn_uri = 'mongodb://' + self._local_mongo_hostname + ':' + str(self._local_mongo_port)
+
+        self._local_mongo_database = "darwin_lab"
+
+        self._remote_mongo_conn = None
+        self._remote_mongo_hostname = '188.166.179.144'
+
+
+
+    def get_local_mongo_conn(self) :
+        if self._local_mongo_conn is None:
+            self._local_mongo_conn = pymongo.MongoClient(self._local_mongo_hostname, self._local_mongo_port)
+        return self._local_mongo_conn
+
+    def get_remote_mongo_conn(self):
+        if self._remote_mongo_conn is None:
+            self._remote_mongo_conn = pymongo.MongoClient(self._remote_mongo_hostname, self._remote_mongo_port)
+        return self._remote_mongo_conn
+
+    def get_mongo_db(self, mongo_conn, name_db):
+        if mongo_conn  is not None:
+            return mongo_conn[name_db]
+        else:
+            return None
+
+    def get_mongo_collection(self, mongo_db, name_coll):
+        if mongo_db is not None:
+            return mongo_db[name_coll]
+        else :
+            return None
+
+
 class DBManager:
     def __init__(self):
         self.mysql_db = None
@@ -24,11 +66,29 @@ class DBManager:
 
         self._default_mongo_conn = None
         self._default_mongo_host = '188.166.179.144'
+        self._default_mongo_hostname = 'localhost'
         self._default_mongo_port = 27017
+
+        self._default_mongo_database = "darwin_lab"
+        self._default_mongo_table_stock_daily_price = "Stock_Price_Daily"
+
+
 
         self._default_mysql_uri = "mysql+mysqlconnector://darwin:darwinlab@188.166.179.144:3306/darwindb"
         self._default_mysql_host = '188.166.179.144'
         self._default_mysql_port = 3306
+        self._default_mysql_username = 'darwin'
+        self._default_mysql_password = 'darwinlab'
+        self._default_mysql_database = 'darwindb'
+
+        self._local_mongo_host = 'localhost'
+        self._local_mongo_port = 27017
+        self._local_mongo_conn_uri = 'mongodb://' + self._local_mongo_host + ":" \
+                        + str(self._local_mongo_port)
+        self._local_mongo_db = 'darwin_lab'
+        self._local_mongo_db_uri = self._local_mongo_conn_uri + "/" + self._local_mongo_db
+
+
 
     def set_mysql_conn(self, hostname, username, password, db):
         self.mysql_hostname = hostname
@@ -41,6 +101,25 @@ class DBManager:
                          + str(self.mysql_port_default) + "/" + self.mysql_database
         return self.mysql_uri
 
+    def get_default_mysql_uri(self):
+        self.mysql_uri = "mysql+mysqlconnector://" + self._default_mysql_username + ":" \
+                         + self._default_mysql_password + "@" + self._default_mysql_host + ":" \
+                         + str(self._default_mysql_port) + "/" + self._default_mysql_database
+        return self.mysql_uri
+
+    def get_mongo_uri(self, hostname='localhost', port=27017, username=None, password=None, database=None, collection=None):
+        mongo_uri = "mongodb://"
+        if username is not None and password is not None:
+            mongo_uri = mongo_uri + username + ":" + password + "@" \
+
+        mongo_uri = mongo_uri + hostname + ":" + str(port)
+        if database is not None :
+            mongo_uri = mongo_uri + "/" + database
+            if collection is not None:
+                mongo_uri = mongo_uri + "::" + collection
+
+        return mongo_uri
+
 
     def get_default_mongo_conn(self):
         if self._default_mongo_conn == None:
@@ -52,9 +131,6 @@ class DBManager:
 
         return self._default_mongo_conn
 
-    def get_default_mysql_conn(self):
-        return self._default_mysql_uri
-
 
 
 
@@ -62,8 +138,22 @@ class StockManager:
     def __init__(self):
         self._db_manager = DBManager()
         self._default_mysql_stockinfo_table = "Stock_Info"
-        self._default_mysql_stockprice_daily_table = "Stock_Price_Daily_tmp"
+        self._default_mysql_stockprice_daily_table_tmp = "Stock_Price_Daily_tmp"
+        self._default_mysql_stockprice_daily_table = "Stock_Price_Daily"
 
+        self._settings = Settings()
+        self._mongo_conn = None
+        self._mongo_db = None
+        self._mongo_coll_price_daily = None
+        self._mongo_coll_price_daily_tmp = None
+
+    def init_mongo_db(self, mongo_conn):
+        self._mongo_conn = mongo_conn
+        self._mongo_db = self._settings.get_mongo_db(mongo_conn, self._settings._local_mongo_database)
+        self._mongo_coll_price_daily = self._settings.get_mongo_collection(self._mongo_db,
+                    self._settings._local_mongo_collection_stock_daily_price)
+        self._mongo_coll_price_daily_tmp = self._settings.get_mongo_collection(self._mongo_db,
+                    self._settings._local_mongo_collection_stock_daily_price_tmp)
 
     # downloading stock related data from Tushare
     def download_stock_info(self):
@@ -72,6 +162,9 @@ class StockManager:
 
         stock_info = stock_info_tmp[['code', 'name', 'industry', 'area', 'timeToMarket']]
         stock_info.columns = ['code', 'name', 'industry', 'listedLoc', 'listedDate']
+
+        stock_info['listedDate'][stock_info['listedDate'] == 0] = 20160101
+        #stock_info['listedDate'] = pd.to_datetime(stock_info['listedDate'], format='%Y%m%d')
         return stock_info
 
     def download_stock_industry(self):
@@ -92,13 +185,16 @@ class StockManager:
         stock_area.columns = ['code', 'location']
         return stock_area
 
-    def download_stock_hist_price(self, codes, start, end):
-        prices = pd.DataFrame()
-        for code in codes:
-            print "downloading " + code
+
+
+    # downloading stock historical price
+    def download_stock_hist_price(self, code, start, end=None):
+        print "downloading " + code
+        if end is None:
+            price = ts.get_h_data(code, start)
+        else:
             price = ts.get_h_data(code, start, end)
-            prices = pd.concat([prices, price])
-        return prices
+        return price
 
     def download_stock_latest_price(self, codes):
         prices = pd.DataFrame()
@@ -115,6 +211,7 @@ class StockManager:
         ### download stock infomration
         print "downloading stock basic info:"
         stock_info = self.download_stock_info()
+        #stock_info.head()
         # stock_industry = download_stock_industry()
         # stock_concept = download_stock_concept()
         print "downloading stock areas info:"
@@ -139,32 +236,102 @@ class StockManager:
 
         stock_total_info = stock_total_info.join(small_stocks.set_index('code'), how='left')
         stock_total_info['size'] = stock_total_info['size'].fillna('large')
-
+        stock_total_info = stock_total_info.reset_index()
         return stock_total_info
 
-    def load_stock_info_db(self):
-        stock_info_uri = self._db_manager.get_default_mysql_conn() + "::" + self._default_mysql_stockinfo_table
-        stock_info = self.download_total_stock_info()
 
-        bl_stock_info = blaze.Data(stock_info.reset_index())
-        odo.odo(bl_stock_info, stock_info_uri)
+    # loading data into database
+    # destionation: stock_info_uri can be either mysql connection or mongo db connection
+    def load_stock_info_into_mongo_db(self, mongo_coll):
+        if mongo_coll is None:
+            return
+        stock_info = self.download_total_stock_info()
+        records = json.loads(stock_info.T.to_json()).values()
+        mongo_coll.insert(records)
+
+    def load_stock_price_into_mongo_db(self, code, start, end, mongo_coll):
+        if mongo_coll is None:
+            print "mongo_coll is null"
+            return
+
+        stock_prices = self.download_stock_hist_price(code, start, end)
+        #stock_prices = s_prices.reset_index()
+        stock_prices['code'] = code
+        #stock_prices['date'] = str(stock_prices['date'])
+        #stock_prices = stock_prices.reset_ind`ex()
+        print "loading " + code + " into db"
+        records = json.loads(stock_prices.T.to_json()).values()
+        mongo_coll.insert(records)
+        print "success"
+
+
+
+    # def load_stock_into_db(self, stock_info_uri):
+    #     info_dshape = blaze.dshape("var * {'code':string, 'name':string, 'industry':string, "
+    #                                "'listedDate':datetime, 'location':string, 'listedLoc':string, "
+    #                                "'size':string}")
+    #     stock_info = self.download_total_stock_info()
+    #     odo.odo(blaze.Data(stock_info.reset_index(), info_dshape), stock_info_uri)
+
+    # def load_stock_info_db(self):
+    #     stock_info_uri = self._db_manager.get_default_mysql_conn() + "::" + self._default_mysql_stockinfo_table
+    #     stock_info = self.download_total_stock_info()
+    #
+    #     bl_stock_info = blaze.Data(stock_info.reset_index())
+    #     odo.odo(bl_stock_info, stock_info_uri)
+
+    def get_all_stock_info(self, stock_info_uri):
+        info_dshape = blaze.dshape("var * {'code':string, 'name':string, 'industry':string, "
+                                   "'listedDate':datetime, 'location':string, 'listedLoc':string, "
+                                   "'size':string}")
+
+
+        pd_codes = odo.odo(blaze.Data(stock_info_uri, info_dshape), pd.DataFrame)
+        return pd_codes
+
+    def get_all_stock_info(self, mongo_coll):
+        if mongo_coll is None:
+            return None
+        df_stock_info = pd.DataFrame(list(mongo_coll.find()))
+        return df_stock_info
+
+
 
     def load_stock_latest_price_db(self, codes):
-        stock_price_uri = self._db_manager.get_default_mysql_conn() + "::" + self._default_mysql_stockprice_daily_table
+        stock_price_uri = self._db_manager.get_default_mysql_conn() + \
+                          "::" + self._default_mysql_stockprice_daily_table_tmp
         stock_price = self.download_stock_latest_price(codes)
         bl_stock_price = blaze.Data(stock_price.reset_index())
         odo.odo(bl_stock_price, stock_price_uri)
 
     def load_stock_hist_price_db(self, codes, start, end):
-        stock_price_uri = self._db_manager.get_default_mysql_conn() + "::" + self._default_mysql_stockprice_daily_table
+        stock_price_uri = self._db_manager.get_default_mysql_conn() +\
+                          "::" + self._default_mysql_stockprice_daily_table_tmp
         stock_price = self.download_stock_hist_price(codes, start, end)
         bl_stock_price = blaze.Data(stock_price.reset_index())
         odo.odo(bl_stock_price, stock_price_uri)
 
+
+    # get information from mysql data
     def get_all_stock_codes(self):
-        stock_info_uri = self._db_manager.get_default_mysql_conn() + "::" + self._default_mysql_stockinfo_table
+        stock_info_uri = self._db_manager.get_default_mysql_uri() + \
+                         "::" + self._default_mysql_stockinfo_table
         pd_codes = odo.odo(blaze.Data(stock_info_uri).code, pd.DataFrame)
         return pd_codes
+
+
+
+    def get_stock_hist(self, code, start, end) :
+        pass
+
+    def get_stocks_hist(self, codes, start, end, fields):
+        output = dict()
+        stock_price_uri = self._db_manager.get_default_mysql_uri() + \
+                        "::" + self._default_mysql_stockprice_daily_table
+
+        for field in fields:
+            blaze.Data()
+
 
 
 
@@ -174,46 +341,64 @@ class BatchJobManager:
     def __init__(self):
         self._db_manager = DBManager()
         self._stock_manager = StockManager()
+        self._settings = Settings()
+        self._mongo_db = None
 
-        self._mongo_conn = self._db_manager.get_default_mongo_conn()
-        self._mongo_db_table = 'darwin_lab'
-        self._mongo_coll_job_stockdaily_table = 'BatchJobs_Stock_Daily_Price'
-
-        self._mongo_db =  self._mongo_conn[self._mongo_db_table]
-        self._mongo_coll = self._mongo_db[self._mongo_coll_job_stockdaily_table]
+        self.init_mongo_db(self._settings.get_local_mongo_conn())
+        self._stock_manager.init_mongo_db(self._settings.get_local_mongo_conn())
 
 
+    def init_mongo_db(self, mongo_conn):
+        self._mongo_conn = mongo_conn
+        self._mongo_db = self._settings.get_mongo_db(mongo_conn, self._settings._local_mongo_database)
+        self._mongo_coll_jobs = self._settings.get_mongo_collection(self._mongo_db,
+                    self._settings._local_mongo_collection_batch_job_stock_daily_price)
 
-    def add_job_download_all_stock_daily_price(self, start, end):
-        codes = self._stock_manager.get_all_stock_codes()
-        self.add_job_download_stock_daily_price(codes, start, end)
 
-    def add_job_download_stock_daily_price(self, codes, start, end):
+
+    def add_job_download_all_stock_daily_price(self, start, end, mongo_db):
+        if mongo_db is None:
+            return
+
+        mongo_coll_jobs = mongo_db[self._settings._local_mongo_collection_batch_job_stock_daily_price]
+        mongo_coll_stock_info = mongo_db[self._settings._local_mongo_collection_stock_info]
+
+        df_stock_info = self._stock_manager.get_all_stock_info(mongo_coll_stock_info)
+        codes = df_stock_info['code']
+        self.add_job_download_stock_daily_price(codes, start, end, mongo_coll_jobs)
+
+    def add_job_download_stock_daily_price(self, codes, start, end, mongo_coll):
 
         jobs = pd.DataFrame()
         jobs['code'] = codes
         jobs['action'] = 'load'
         jobs['start'] = start
-        jobs['end'] = end
+
+        if end is None :
+            jobs['end'] = None
+        else :
+            jobs['end'] = end
         jobs['status'] = 0
         #jobs = jobs.set_index('code')
         records = json.loads(jobs.T.to_json()).values()
-        self._mongo_coll.insert(records)
+        mongo_coll.insert(records)
         print jobs
 
-    def update_job_download_stock_daily_price(self, job_id, status):
-        self._mongo_coll.find_one_and_update({"_id":job_id}, {"$set": {"status": status}})
+    def update_job_download_stock_daily_price(self, job_id, status, mongo_coll):
+        mongo_coll.find_one_and_update({"_id": job_id}, {"$set": {"status": status}})
 
 
 
-    def process_job_download_stock_daily_price(self):
-        while True :
-            jobs = self._mongo_coll.find_one({'status': 0})
+    def process_job_download_stock_daily_price(self, mongo_coll_job, mongo_coll_price):
+        while True:
+            #jobs = mongo_coll_job.find_one({'status': 0})
+            jobs = mongo_coll_job.find_one({'status': 0})
+
 
             if jobs  == None:
                 print "no more job to process!"
                 return
-            else :
+            else:
                 jobid = jobs["_id"]
                 code = jobs["code"]
                 start = jobs["start"]
@@ -222,28 +407,73 @@ class BatchJobManager:
                 try :
                     print "----------------------------\n"
                     print "loading " + code +"\n"
-                    self._stock_manager.load_stock_hist_price_db(code, start, end)
+                    self._stock_manager.load_stock_price_into_mongo_db(code, start, end, mongo_coll_price)
                     print "success "
-                    self.update_job_download_stock_daily_price(jobid, 1)
+                    self.update_job_download_stock_daily_price(jobid, 1, mongo_coll_job)
                     #self._mongo_coll.find_one_and_update({"_id":jobid}, {"$set": {"status": 1}})
                 except :
                     print "failed "
-                    self.update_job_download_stock_daily_price(jobid, 2)
+                    self.update_job_download_stock_daily_price(jobid, 2, mongo_coll_job)
                     #self._mongo_coll.find_one_and_update({"_id":jobid}, {"$set": {"status": 2}})
 
-'''
-jobmgr = BatchJobManager()
-job = jobmgr._mongo_coll.find_one({'status':0})
-print job['_id']
 
-jobs = jobmgr.add_job_download_stock_daily_price(['000009'],'2015-12-31', '2016-01-19')
+def download_and_store_stock_info() :
+    jobmgr = BatchJobManager()
+    settings = Settings()
+    mongo_db = settings.get_mongo_db(settings.get_local_mongo_conn(), settings._local_mongo_database)
+    mongo_coll_jobs = settings.get_mongo_collection(mongo_db, settings._local_mongo_collection_batch_job_stock_daily_price)
+    mongo_coll_info = settings.get_mongo_collection(mongo_db, Settings._local_mongo_collection_stock_info)
+
+    jobmgr._stock_manager.load_stock_info_into_mongo_db(mongo_coll_info)
+
+#download_and_store_stock_info()
+def add_download_jobs(start, end=None) :
+    jobmgr = BatchJobManager()
+    settings = Settings()
+    mongo_db = settings.get_mongo_db(settings.get_local_mongo_conn(), settings._local_mongo_database)
+    mongo_coll_jobs = settings.get_mongo_collection(mongo_db, settings._local_mongo_collection_batch_job_stock_daily_price)
+    mongo_coll_info = settings.get_mongo_collection(mongo_db, Settings._local_mongo_collection_stock_info)
+
+    infos = jobmgr._stock_manager.get_all_stock_info(mongo_coll_info)
+    codes = infos['code']
+
+    jobmgr.add_job_download_stock_daily_price(codes, start, end, mongo_coll_jobs)
+
+def process_download_jobs() :
+    jobmgr = BatchJobManager()
+    jobmgr.process_job_download_stock_daily_price(jobmgr._mongo_coll_jobs, jobmgr._stock_manager._mongo_coll_price_daily_tmp)
+
+def get_data_from_mongo():
+    jobmgr = BatchJobManager()
+    settings = Settings()
+    mongo_db = settings.get_mongo_db(settings.get_local_mongo_conn(), settings._local_mongo_database)
+    mongo_coll_price = settings.get_mongo_collection(mongo_db, settings._local_mongo_collection_stock_daily_price_tmp)
+    df_prices = pd.DataFrame(list(mongo_coll_price.find()))
+    df_prices['date'] = pd.to_datetime(df_prices['date']*1000*1000)
+    df_prices = df_prices.set_index('date')
+    df_prices = df_prices.sort_index()
+    return df_prices
+
+
+add_download_jobs('2014-01-01')
+process_download_jobs()
+
+#add_download_jobs('2014-01-01', '2016-01-30')
+#jobmgr.init_mongo_db()
+
+
+## add download jobs for all the codes
+#jobmgr.add_job_download_all_stock_daily_price('2014-01-01', '2016-01-30', mongo_coll_jobs)
+
+
+#jobmgr.add_job_download_all_stock_daily_price('2014-01-01', '2016-01-30')
+#jobs = jobmgr.add_job_download_stock_daily_price(['000009'],'2015-12-31', '2016-01-19')
 #jobmgr.process_job_download_stock_daily_price()
-jobs = jobmgr._mongo_coll.find({'status':0})
-for job in jobs :
-    jobid = job["_id"]
-    samejob = jobmgr._mongo_coll.find_one({'_id':jobid})
-    print jobid
-    if jobid == samejob["_id"] :
-        print "find the same one"
-        jobmgr._mongo_coll.find_one_and_update({'_id':jobid}, {'$set': {'status': 1}})
-'''
+#jobs = jobmgr._mongo_coll.find({'status':0})
+#for job in jobs :
+#    jobid = job["_id"]
+    #samejob = jobmgr._mongo_coll.find_one({'_id':jobid})
+#    print jobid
+    #if jobid == samejob["_id"]:
+    #    print "find the same one"
+    #    jobmgr._mongo_coll.find_one_and_update({'_id':jobid}, {'$set': {'status': 1}})
