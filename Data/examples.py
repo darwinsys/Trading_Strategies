@@ -33,4 +33,4 @@ mysql_uri = db.set_mysql_conn(hostname, "darwin", "darwinlab", "darwindb")
 print mysql_uri
 codes = ['000024']  # , '000002']
 stock_mgr = StockManager.StockManager(mysql_uri)
-stock_mgr.load_stock_hist_price_db(codes, '2010-01-01', '2016-01-01', 'Stock_Price_Daily_tmp')
+# stock_mgr.load_stock_hist_price_db(codes, '2010-01-01', '2016-01-01', 'Stock_Price_Daily_tmp')

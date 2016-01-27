@@ -1,28 +1,40 @@
-import StockManager as sm
+from StockManager import *
 import odo.odo as odo
 import pandas as pd
 import blaze
 
 
-def test_download_price():
-    codes = ['000001', '000002']
-    fields = ['close', 'open']
-    start = '2015-01-01'
-    end = '2015-12-31'
-
-    ###
-    jobmgr = sm.BatchJobManager()
-
-    output = dict()
-    stock_price_uri = jobmgr._db_manager.get_default_mysql_uri() + \
-                      "::" + jobmgr._stock_manager._default_mysql_stockprice_daily_table
-    print stock_price_uri
-
-    stock_price_blz = blaze.Data(stock_price_uri)
-
-    for field in fields:
-        data = stock_price_blz[stock_price_blz['code'] in codes]
-        pd_price = odo(data, pd.DataFrame)
+datamgr = DataManager(Settings())
+#datamgr.add_download_jobs('2014-01-01')
+datamgr.process_download_jobs()
 
 
-test_download_price()
+#jobmgr = BatchJobManager()
+#jobmgr.task_CopyStockDailyPrice('000001')
+
+
+
+#download_and_store_stock_info()
+# jobmgr.add_job_download_all_stock_daily_price('2014-01-01')
+# jobmgr.process_job_download_stock_daily_price()
+
+
+#add_download_jobs('2014-01-01', '2016-01-30')
+#jobmgr.init_mongo_db()
+
+
+## add download jobs for all the codes
+#jobmgr.add_job_download_all_stock_daily_price('2014-01-01', '2016-01-30', mongo_coll_jobs)
+
+
+#jobmgr.add_job_download_all_stock_daily_price('2014-01-01', '2016-01-30')
+#jobs = jobmgr.add_job_download_stock_daily_price(['000009'],'2015-12-31', '2016-01-19')
+#jobmgr.process_job_download_stock_daily_price()
+#jobs = jobmgr._mongo_coll.find({'status':0})
+#for job in jobs :
+#    jobid = job["_id"]
+    #samejob = jobmgr._mongo_coll.find_one({'_id':jobid})
+#    print jobid
+    #if jobid == samejob["_id"]:
+    #    print "find the same one"
+    #    jobmgr._mongo_coll.find_one_and_update({'_id':jobid}, {'$set': {'status': 1}})
