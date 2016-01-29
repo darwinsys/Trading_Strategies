@@ -9,6 +9,7 @@ import pymongo
 
 
 class Settings:
+    MAX_DOWNLOAD_TRIALS = 6
     _local_mongo_collection_batch_job_stock_daily_price = "BatchJobs_Stock_Price_Daily"
     _local_mongo_collection_stock_daily_price = "Stock_Price_Daily"
     _local_mongo_collection_stock_daily_price_tmp = "Stock_Price_Daily_tmp"
@@ -352,6 +353,17 @@ class BatchJobManager:
         mongo_coll_jobs = self._settings.get_local_mongo_coll_job()
         mongo_coll_jobs.find_one_and_update({"_id": job_id}, {"$set": {"status": status}})
 
+    def restart_failed_job(self):
+        count = 0
+        while True:
+            tuple = self._settings.get_local_mongo_coll_job().find_one_and_update({"status" : {"$gt":0}}, {"$set" : {"status" : 0}})
+            count = count + 1
+            print "restart " + str(count)
+            if tuple is None:
+                print "finish all the restart!"
+                return
+
+
     ## Process Tasks
     def task_CopyStockDailyPrice(self, code):
         job_status = 1
@@ -385,7 +397,7 @@ class BatchJobManager:
                 return
 
             n_trials = 0
-            while n_trials <= 5:
+            while n_trials <= self._settings.MAX_DOWNLOAD_TRIALS:
                 jobid = jobs["_id"]
                 code = jobs["code"]
                 start = jobs["start"]
@@ -401,21 +413,12 @@ class BatchJobManager:
                     # self._mongo_coll.find_one_and_update({"_id":jobid}, {"$set": {"status": 1}})
                 except:
                     print "failed "
-                    self.update_job_download_stock_daily_price(jobid, ++n_trials)
+                    n_trials = n_trials + 1
+                    self.update_job_download_stock_daily_price(jobid, n_trials)
                     continue
                     # self._mongo_coll.find_one_and_update({"_id":jobid}, {"$set": {"status": 2}})
 
-    def restart_failed_job(self):
-        mongo_coll_job = self._settings.get_local_mongo_coll_job()
-        while True:
-            jobs = mongo_coll_job.find_one({'status': 2})
 
-            if jobs == None:
-                print "all job successfully done!"
-                return
-            else:
-                jobid = jobs["_id"]
-                self.update_job_download_stock_daily_price(jobid, 0)
 
 
 class DataManager:
@@ -471,8 +474,4 @@ class DataManager:
         df_prices = df_prices.set_index('date')
         df_prices = df_prices.sort_index()
         return df_prices
-
-    def process_failed_download_jobs(self):
-        # todo
-        pass
 

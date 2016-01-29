@@ -5,9 +5,10 @@ import blaze
 
 
 datamgr = DataManager(Settings())
-#datamgr.add_download_jobs('2014-01-01')
-datamgr.process_download_jobs()
+#datamgr.add_download_jobs('2013-01-01')
 
+# datamgr._jobManager.restart_failed_job()
+datamgr.process_download_jobs()
 
 #jobmgr = BatchJobManager()
 #jobmgr.task_CopyStockDailyPrice('000001')
