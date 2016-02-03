@@ -170,8 +170,8 @@ class StockManager:
     # def init_mongo_db(self, mongo_conn):
     #     self._mongo_conn = mongo_conn
     #     self._mongo_db = self._settings.get_local_mongo_db()
-    #     self._mongo_coll_price_daily = self._settings.get_local_mongo_coll_price()
-    #     self._mongo_coll_price_daily_tmp = self._settings.get_local_mongo_coll_price_tmp()
+    #     self._mongo_coll_price_daily = self._settings.get_mongo_coll_price()
+    #     self._mongo_coll_price_daily_tmp = self._settings.get_mongo_coll_price_tmp()
 
     # downloading stock related data from Tushare
     def download_stock_info(self):
@@ -257,13 +257,13 @@ class StockManager:
     # loading data into database
     # destionation: stock_info_uri can be either mysql connection or mongo db connection
     def load_stock_info_into_mongo_db(self):
-        mongo_coll = self._settings.get_local_mongo_coll_info()
+        mongo_coll = self._settings.get_mongo_coll_info()
         stock_info = self.download_total_stock_info()
         records = json.loads(stock_info.T.to_json()).values()
         mongo_coll.insert(records)
 
     def load_stock_price_into_mongo_db(self, code, start, end):
-        mongo_coll = self._settings.get_local_mongo_coll_price_tmp()
+        mongo_coll = self._settings.get_mongo_coll_price_tmp()
         stock_prices = self.download_stock_hist_price(code, start, end)
         stock_prices = stock_prices.reset_index()
         stock_prices['code'] = code
@@ -297,7 +297,7 @@ class StockManager:
         return pd_codes
 
     def get_all_stock_info(self):
-        mongo_coll = self._settings.get_local_mongo_coll_info()
+        mongo_coll = self._settings.get_mongo_coll_info()
         df_stock_info = pd.DataFrame(list(mongo_coll.find()))
         return df_stock_info
 
@@ -326,14 +326,14 @@ class BatchJobManager:
 
     def add_job_download_all_stock_daily_price(self, start, end):
 
-        mongo_coll_stock_info = self._settings.get_local_mongo_coll_info()
+        mongo_coll_stock_info = self._settings.get_mongo_coll_info()
 
         df_stock_info = self._stock_manager.get_all_stock_info()
         codes = df_stock_info['code']
         self.add_job_download_stock_daily_price(codes, start, end)
 
     def add_job_download_stock_daily_price(self, codes, start, end):
-        mongo_coll_jobs = self._settings.get_local_mongo_coll_job()
+        mongo_coll_jobs = self._settings.get_mongo_coll_job()
         jobs = pd.DataFrame()
         jobs['code'] = codes
         jobs['action'] = 'load'
@@ -350,13 +350,13 @@ class BatchJobManager:
         print jobs
 
     def update_job_download_stock_daily_price(self, job_id, status):
-        mongo_coll_jobs = self._settings.get_local_mongo_coll_job()
+        mongo_coll_jobs = self._settings.get_mongo_coll_job()
         mongo_coll_jobs.find_one_and_update({"_id": job_id}, {"$set": {"status": status}})
 
     def restart_failed_job(self):
         count = 0
         while True:
-            tuple = self._settings.get_local_mongo_coll_job().find_one_and_update({"status" : {"$gt":0}}, {"$set" : {"status" : 0}})
+            tuple = self._settings.get_mongo_coll_job().find_one_and_update({"status" : {"$gt":0}}, {"$set" : {"status" : 0}})
             count = count + 1
             print "restart " + str(count)
             if tuple is None:
@@ -368,7 +368,7 @@ class BatchJobManager:
     def task_CopyStockDailyPrice(self, code):
         job_status = 1
         while True:
-            tuple = self._settings.get_local_mongo_coll_price_tmp().find_one({'code': code})
+            tuple = self._settings.get_mongo_coll_price_tmp().find_one({'code': code})
             if tuple is None:
                 print "no tuple exists"
                 return job_status
@@ -376,11 +376,11 @@ class BatchJobManager:
                 code = tuple["code"]
                 date = tuple["date"]
 
-                tuple_src = self._settings.get_local_mongo_coll_price().find_one({'code': code, 'date': date})
+                tuple_src = self._settings.get_mongo_coll_price().find_one({'code': code, 'date': date})
                 if tuple_src is None:
                     print "insert tuple"
                     try:
-                        self._settings.get_local_mongo_coll_price.insert_one(tuple)
+                        self._settings.get_mongo_coll_price.insert_one(tuple)
                     except:
                         print "fail to insert"
                         job_status = 2
@@ -391,7 +391,7 @@ class BatchJobManager:
     def process_job_download_stock_daily_price(self):
         while True:
             # jobs = mongo_coll_job.find_one({'status': 0})
-            jobs = self._settings.get_local_mongo_coll_job().find_one({'status': 0})
+            jobs = self._settings.get_mongo_coll_job().find_one({'status': 0})
             if jobs == None:
                 print "no more job to process!"
                 return
@@ -467,7 +467,7 @@ class DataManager:
 
     def get_data_from_mongo(self):
         jobmgr = self._jobManager
-        mongo_coll_price = self._settings.get_local_mongo_coll_price()
+        mongo_coll_price = self._settings.get_mongo_coll_price()
 
         df_prices = pd.DataFrame(list(mongo_coll_price.find()))
         df_prices['date'] = pd.to_datetime(df_prices['date'] * 1000 * 1000)
