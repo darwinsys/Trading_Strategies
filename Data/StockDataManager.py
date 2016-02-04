@@ -62,7 +62,7 @@ class Settings :
 
     def get_mysql_engine(self):
         if self._mysql_engine is None :
-            self._mysql_engine = sa.create_engine(Settings._mysql_url, echo=True)
+            self._mysql_engine = create_engine(Settings._mysql_url, echo=True)
         return self._mysql_engine
 
     def get_mysql_conn(self):
@@ -82,16 +82,16 @@ class Settings :
 
     ### functions to get local mongo collections
     def get_mongo_coll_job(self):
-        return self.get_mongl_coll(Settings()._mongo_collection_batch_job_stock_daily_price)
+        return self.get_mongl_coll(self._mongo_collection_batch_job_stock_daily_price)
 
     def get_mongo_coll_price_tmp(self):
-        return self.get_mongl_coll(Settings()._mongo_collection_stock_daily_price_tmp)
+        return self.get_mongl_coll(self._mongo_collection_stock_daily_price_tmp)
 
     def get_mongo_coll_price(self):
-        return self.get_mongl_coll(Settings()._mongo_collection_stock_daily_price)
+        return self.get_mongl_coll(self._mongo_collection_stock_daily_price)
 
     def get_mongo_coll_info(self):
-        return self.get_mongl_coll(Settings()._mongo_collection_stock_info)
+        return self.get_mongl_coll(self._mongo_collection_stock_info)
 
     def get_mongl_coll(self, name_coll):
         mongo_db = self.get_mongo_db()
@@ -115,9 +115,11 @@ class DownloadManager:
 
 class TaskManager :
     _downloader = None
+    _settings = None
 
     def __init__(self):
         self._downloader = DownloadManager()
+        self._settings = Settings()
 
     def load_stock_price_into_db(self, code, start, end=None):
         df_prices = self._downloader.download_stock_hist_price(code, start, end)
@@ -126,44 +128,44 @@ class TaskManager :
         df_prices['date_num'] = pd.to_numeric(df_prices['date'])
         df_prices['key'] = df_prices['code'] + '_' + df_prices['date_num'].astype(str)
 
-
-
         df_1 = df_prices[['key', 'code', 'date', 'open', 'high', 'low', 'close', 'volume', 'amount']]
-        print 'loading {code} with {num} rows into db'.format(code=code, num=str(len(df_1['key'])))
 
-        try :
-            odo.odo(blaze.Data(df_1), Settings._mysql_url + '::' + Settings._table_price_tmp)
-        except :
-            print 'failed'
+        ### delete all the duplicated keys in the original database
+        max_key = max(df_1['key'])
+        min_key = min(df_1['key'])
 
-
-    def sync_stock_price(self):
-        '''
-        function: copy the downloaded daily prices from the temporary table to the final table
-        :return:
-        '''
-
-        # step 1: find the duplicate entries in the final table, and delete them
-        table_temp = Settings.get_mysql_table(Settings._table_price_tmp)
-        table_final = Settings.get_mysql_table(Settings._table_price)
+        db_conn = self._settings.get_mysql_conn()
+        tl_price = self._settings.get_mysql_table(self._settings._table_price)
+        qr_delete = tl_price.delete().where(tl_price.c.key < max_key).where(tl_price.c.key > min_key)
+        result = db_conn.execute(qr_delete)
+        #db_conn.close()
+        ### load the data into the
+        #tl_price_tmp = self._settings.get_mysql_table(self._settings._table_price_tmp)
+        #qr_insert = tl_price.insert()
+        #result = db_conn.execute(qr_insert, df_1.to_records(index=False,convert_datetime64= False ))
+        odo.odo(blaze.Data(df_1), Settings._mysql_url + '::' + Settings._table_price)
 
 
 
 class JobManager :
+    _settings = None
+    _taskmanager = None
+
     def __init__(self):
-        pass
+        self._settings = Settings()
+        self._taskmanager = TaskManager()
 
 
     def process_job_download_stock_daily_price(self):
         while True:
             # jobs = mongo_coll_job.find_one({'status': 0})
-            jobs = Settings().get_mongo_coll_job().find_one({'status': 0})
-            if jobs == None:
+            jobs = self._settings.get_mongo_coll_job().find_one({'status': 0})
+            if jobs is None:
                 print "no more job to process!"
                 return
 
             n_trials = 0
-            while n_trials <= Settings().MAX_DOWNLOAD_TRIALS:
+            while n_trials <= self._settings.MAX_DOWNLOAD_TRIALS:
                 jobid = jobs["_id"]
                 code = jobs["code"]
                 start = jobs["start"]
@@ -172,7 +174,7 @@ class JobManager :
                 try:
                     print "----------------------------\n"
                     print "loading " + code + "\n"
-                    TaskManager().load_stock_price_into_db(code, start, end)
+                    self._taskmanager.load_stock_price_into_db(code, start, end)
                     print "success "
                     self.update_job_download_stock_daily_price(jobid, -1)
                     break
@@ -185,11 +187,11 @@ class JobManager :
                     # self._mongo_coll.find_one_and_update({"_id":jobid}, {"$set": {"status": 2}})
 
     def update_job_download_stock_daily_price(self, job_id, status):
-        mongo_coll_jobs = Settings().get_mongo_coll_job()
+        mongo_coll_jobs = self._settings.get_mongo_coll_job()
         mongo_coll_jobs.find_one_and_update({"_id": job_id}, {"$set": {"status": status}})
 
     def get_all_stock_info(self):
-        mongo_coll = Settings().get_mongo_coll_info()
+        mongo_coll = self._settings.get_mongo_coll_info()
         df_stock_info = pd.DataFrame(list(mongo_coll.find()))
         return df_stock_info
 
@@ -201,7 +203,7 @@ class JobManager :
         self.add_job_download_stock_daily_price(codes, start, end)
 
     def add_job_download_stock_daily_price(self, codes, start, end):
-        mongo_coll_jobs = Settings().get_mongo_coll_job()
+        mongo_coll_jobs = self._settings.get_mongo_coll_job()
         jobs = pd.DataFrame()
         jobs['code'] = codes
         jobs['action'] = 'load'
@@ -220,7 +222,7 @@ class JobManager :
 
 
     def get_data_from_mongo(self):
-        mongo_coll_price = Settings().get_mongo_coll_price()
+        mongo_coll_price = self._settings.get_mongo_coll_price()
 
         df_prices = pd.DataFrame(list(mongo_coll_price.find()))
         df_prices['date'] = pd.to_datetime(df_prices['date'] * 1000 * 1000)
@@ -237,5 +239,5 @@ class JobManager :
 ## testing
 if __name__ == '__main__' :
     jobmgr = JobManager()
-    #jobmgr.add_download_jobs('2015-01-01')
+    #jobmgr.add_download_jobs('2016-01-01')
     jobmgr.process_job_download_stock_daily_price()
