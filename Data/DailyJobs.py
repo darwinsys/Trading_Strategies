@@ -29,7 +29,7 @@ datamgr.process_download_jobs()
 
 
 #jobmgr.add_job_download_all_stock_daily_price('2014-01-01', '2016-01-30')
-#jobs = jobmgr.add_job_download_stock_daily_price(['000009'],'2015-12-31', '2016-01-19')
+#jobs = jobmgr.add_download_job(['000009'],'2015-12-31', '2016-01-19')
 #jobmgr.process_job_download_stock_daily_price()
 #jobs = jobmgr._mongo_coll.find({'status':0})
 #for job in jobs :

@@ -117,9 +117,9 @@ class TaskManager :
     _downloader = None
     _settings = None
 
-    def __init__(self):
+    def __init__(self, settings):
         self._downloader = DownloadManager()
-        self._settings = Settings()
+        self._settings = settings
 
     def load_stock_price_into_db(self, code, start, end=None):
         df_prices = self._downloader.download_stock_hist_price(code, start, end)
@@ -136,7 +136,7 @@ class TaskManager :
 
         db_conn = self._settings.get_mysql_conn()
         tl_price = self._settings.get_mysql_table(self._settings._table_price)
-        qr_delete = tl_price.delete().where(tl_price.c.key < max_key).where(tl_price.c.key > min_key)
+        qr_delete = tl_price.delete().where(tl_price.c.key <= max_key).where(tl_price.c.key >= min_key)
         result = db_conn.execute(qr_delete)
 
         try :
@@ -157,9 +157,9 @@ class JobManager :
     _settings = None
     _taskmanager = None
 
-    def __init__(self):
-        self._settings = Settings()
-        self._taskmanager = TaskManager()
+    def __init__(self, settings):
+        self._settings = settings
+        self._taskmanager = TaskManager(settings)
 
 
     def process_job_download_stock_daily_price(self):
@@ -206,9 +206,9 @@ class JobManager :
         infos = self.get_all_stock_info()
         codes = infos['code']
 
-        self.add_job_download_stock_daily_price(codes, start, end)
+        self.add_download_job(codes, start, end)
 
-    def add_job_download_stock_daily_price(self, codes, start, end):
+    def add_download_job(self, codes, start, end):
         mongo_coll_jobs = self._settings.get_mongo_coll_job()
         jobs = pd.DataFrame()
         jobs['code'] = codes
@@ -244,6 +244,7 @@ class JobManager :
 
 ## testing
 if __name__ == '__main__' :
-    jobmgr = JobManager()
+    settings = Settings()
+    jobmgr = JobManager(settings)
     #jobmgr.add_download_jobs('2016-01-01')
     jobmgr.process_job_download_stock_daily_price()
