@@ -138,6 +138,9 @@ class TaskManager :
         tl_price = self._settings.get_mysql_table(self._settings._table_price)
         qr_delete = tl_price.delete().where(tl_price.c.key < max_key).where(tl_price.c.key > min_key)
         result = db_conn.execute(qr_delete)
+
+
+        df_1.to_sql()
         #db_conn.close()
         ### load the data into the
         #tl_price_tmp = self._settings.get_mysql_table(self._settings._table_price_tmp)
