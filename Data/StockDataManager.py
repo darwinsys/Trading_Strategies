@@ -7,7 +7,7 @@ import tushare as ts
 
 import pymongo
 from sqlalchemy import *
-
+import pymysql
 
 class Settings :
     MAX_DOWNLOAD_TRIALS = 6
@@ -139,14 +139,17 @@ class TaskManager :
         qr_delete = tl_price.delete().where(tl_price.c.key < max_key).where(tl_price.c.key > min_key)
         result = db_conn.execute(qr_delete)
 
+        try :
+            df_1.to_sql(Settings._table_price, db_conn, chunksize=1000, index=False, if_exists='append' )
+        except pymysql.err.IntegrityError :
+            print 'Duplicate Entry: Fail to insert'
 
-        df_1.to_sql()
         #db_conn.close()
         ### load the data into the
         #tl_price_tmp = self._settings.get_mysql_table(self._settings._table_price_tmp)
         #qr_insert = tl_price.insert()
         #result = db_conn.execute(qr_insert, df_1.to_records(index=False,convert_datetime64= False ))
-        odo.odo(blaze.Data(df_1), Settings._mysql_url + '::' + Settings._table_price)
+        #odo.odo(blaze.Data(df_1), Settings._mysql_url + '::' + Settings._table_price)
 
 
 
