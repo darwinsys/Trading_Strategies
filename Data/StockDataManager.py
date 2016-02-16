@@ -39,6 +39,7 @@ class Settings :
     _mongo_collection_stock_daily_price = "Stock_Price_Daily"
     _mongo_collection_stock_daily_price_tmp = "Stock_Price_Daily_tmp"
     _mongo_collection_stock_info = "Stock_info"
+    _mongo_collection_equity_funda_is = "Equity_Funda_IS"
 
     _mongo_port = 27017
     _mongo_conn_uri = 'mongodb://' + _mongo_hostname + ':' + str(_mongo_port)
@@ -92,6 +93,15 @@ class Settings :
 
     def get_mongo_coll_info(self):
         return self.get_mongl_coll(self._mongo_collection_stock_info)
+
+    ### mongo collections for equity fundamental
+    def get_mongo_coll_equity_funda_is(self):
+        return self.get_mongl_coll(self._mongo_collection_equity_funda_is)
+
+
+
+
+
 
     def get_mongl_coll(self, name_coll):
         mongo_db = self.get_mongo_db()
@@ -225,6 +235,8 @@ class JobManager :
         mongo_coll_jobs.insert(records)
         print jobs
 
+    def addJob_Fundamental_Equity_IS(self, codes):
+        mongo_coll_jobs = self._settings.get_mongo_coll_job()
 
 
     def get_data_from_mongo(self):
