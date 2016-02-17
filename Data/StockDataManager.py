@@ -42,11 +42,12 @@ class Settings :
 
     MONGO_COLL_Rawdata_Equity_Fundamental_IS = "RAW_Equity_IncomeStatment"
     MONGO_COLL_Rawdata_Equity_Market = "RAW_Equity_Market"
+    MONGO_COLL_Rawdata_Equity_Factors = "RAW_Equity_Factors"
 
     _mongo_port = 27017
     _mongo_conn_uri = 'mongodb://' + _mongo_hostname + ':' + str(_mongo_port)
 
-    _mongo_db_name = "darwin_lab"
+    _mongo_db_name = "darwin_test"
 
     _mongo_conn = None
 
@@ -103,7 +104,8 @@ class Settings :
     def get_mongo_coll_mkt_eq(self):
         return self.get_mongl_coll(self.MONGO_COLL_Rawdata_Equity_Market)
 
-
+    def get_mongo_coll_eq_factors(self):
+        return self.get_mongl_coll(self.MONGO_COLL_Rawdata_Equity_Factors)
 
 
 
@@ -243,7 +245,7 @@ class JobManager :
                     df_mk = self._factorfactory.getStockFactors(params)
                     print 'Uploading to Mongo Server\n'
                     records = json.loads(df_mk.T.to_json()).values()
-                    self._settings.get_mongo_coll_mkt_eq().insert(records)
+                    self._settings.get_mongo_coll_eq_factors().insert(records)
 
                     print "Success"
                     self.update_job_status(jobid, self.JOB_STATUS_SUCCESS)
