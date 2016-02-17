@@ -181,13 +181,14 @@ class JobManager :
 
     TASK_DOWNLOAD_MARKET_EQUITY = 'download_market_equity'
     TASK_DOWNLOAD_MARKET_EQUITY_BYDATE = 'download_market_equity_dydate'
+    TASK_DOWNLOAD_EQUITY_FACTOR_BYDATE = 'download_equity_factor_dydate'
 
     def __init__(self, settings):
         self._settings = settings
         self._taskmanager = TaskManager(settings)
         self._factorfactory = factors.FactorFactory()
 
-    def processJob_Market_Equity_by_date(self):
+    def processJob_DownloadEquityMktByDate(self):
         while True:
             jobs = self._settings.get_mongo_coll_job().find_one({'status':self.JOB_STATUS_READY, \
                 'task':self.TASK_DOWNLOAD_MARKET_EQUITY_BYDATE})
@@ -218,10 +219,42 @@ class JobManager :
                     n_trials = n_trials + 1
                     self.update_job_retry(jobid, n_trials)
                     continue
-
+            self.update_job_status(jobid, self.JOB_STATUS_FAILED)
         pass
 
+    def processJob_DownloadStockFactorByDate(self):
+        while True:
+            jobs = self._settings.get_mongo_coll_job().find_one({'status':self.JOB_STATUS_READY, \
+                'task':self.TASK_DOWNLOAD_EQUITY_FACTOR_BYDATE})
+            if jobs is None:
+                print 'No more job to process'
+                return
 
+            n_trials = 0
+            while n_trials <= self._settings.MAX_DOWNLOAD_TRIALS:
+                jobid = jobs['_id']
+                tradeDate = datetime.strptime(jobs['tradeDate'], '%Y-%m-%d').strftime('%Y%m%d')
+
+                params = {}
+                params['tradeDate'] = tradeDate
+                try :
+                    print "-------------------------------\n"
+                    print "Downloading Stock Factors for date:{tradeDate}".format(tradeDate=tradeDate)
+                    df_mk = self._factorfactory.getStockFactors(params)
+                    print 'Uploading to Mongo Server\n'
+                    records = json.loads(df_mk.T.to_json()).values()
+                    self._settings.get_mongo_coll_mkt_eq().insert(records)
+
+                    print "Success"
+                    self.update_job_status(jobid, self.JOB_STATUS_SUCCESS)
+                    break
+                except:
+                    print "Failed"
+                    n_trials = n_trials + 1
+                    self.update_job_retry(jobid, n_trials)
+                    continue
+            self.update_job_status(jobid, self.JOB_STATUS_FAILED)
+        pass
 
 
     def processJob_Fundamental_Equity_IS(self):
@@ -368,7 +401,7 @@ class JobManager :
         mongo_coll_jobs.insert(records)
 
 
-    def addJob_Market_Equity_by_date(self, start=None, end=None ):
+    def addJob_DownloadEquityMktByDate(self, start=None, end=None):
         mongo_coll_jobs = self._settings.get_mongo_coll_job()
         jobs = pd.DataFrame()
 
@@ -388,6 +421,25 @@ class JobManager :
         records = json.loads(jobs.T.to_json()).values()
         mongo_coll_jobs.insert(records)
 
+    def addJob_DownloadStockFactorByDate(self, start=None, end=None):
+        mongo_coll_jobs = self._settings.get_mongo_coll_job()
+        jobs = pd.DataFrame()
+
+        if end is None:
+            end = datetime.today().strftime('%Y%m%d')
+
+        if start is None:
+            jobs['tradeDate'] = {end}
+        else :
+            days = self._factorfactory.getTradingDays(start, end)
+            jobs['tradeDate'] = days.iloc[:, 0]
+
+        jobs['task'] = self.TASK_DOWNLOAD_EQUITY_FACTOR_BYDATE
+        jobs['status'] = self.JOB_STATUS_READY
+        jobs['retry'] = 0
+
+        records = json.loads(jobs.T.to_json()).values()
+        mongo_coll_jobs.insert(records)
 
     def get_data_from_mongo(self):
         mongo_coll_price = self._settings.get_mongo_coll_price()
@@ -416,5 +468,9 @@ if __name__ == '__main__' :
     #jobmgr.processJob_Fundamental_Equity_IS()
 
     # Test case 3:
-    #jobmgr.addJob_Market_Equity_by_date('20080101')
-    jobmgr.processJob_Market_Equity_by_date()
+    #jobmgr.addJob_DownloadEquityMktByDate('20080101')
+    #jobmgr.processJob_DownloadEquityMktByDate()
+
+    # Test case 4:
+    #jobmgr.addJob_DownloadStockFactorByDate('20080101')
+    jobmgr.processJob_DownloadStockFactorByDate()

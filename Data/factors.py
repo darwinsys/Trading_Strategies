@@ -80,7 +80,9 @@ class FactorFactory :
     form_funda_cf = '/api/fundamental/getFdmtCF.json'
     form_funda_is = '/api/fundamental/getFdmtIS.json'
     form_mkt_eq = '/api/market/getMktEqud.json'
+    form_mkt_factor_oneday = '/api/market/getStockFactorsOneDay.json'
     form_master_cal = '/api/master/getTradeCal.json'
+
     client = None
 
     def __init__(self, token=None) :
@@ -158,7 +160,7 @@ class FactorFactory :
                 result = json.loads(result)
                 days = pd.DataFrame(result['data'])
                 days = days[days['isOpen'] == 1]
-                days = days.sort('calendarDate', ascending=1)
+                #days = days.sort('calendarDate', ascending=1)
                 return days[['calendarDate']]
             else:
                 print code
@@ -200,7 +202,36 @@ class FactorFactory :
         except Exception, e:
             raise e
 
-    def getFactor_EP(self, params) :
+    def getStockFactors(self, params):
+        try :
+            form = self.form_mkt_factor_oneday
+            field = params.get('field')
+            field = '' if field is None else field
+            secID = params.get('secID')
+            secID = '' if secID is None else secID
+            ticker = params.get('ticker')
+            ticker = '' if ticker is None else ticker
+            tradeDate = params.get('tradeDate')
+            tradeDate = '' if tradeDate is None else tradeDate
+
+            ### downloading data
+            url1='{form}?field={field}&secID={secID}&ticker={ticker}&tradeDate={tradeDate}'\
+                .format(form=form, field=field, secID=secID,ticker=ticker,tradeDate=tradeDate)
+            print url1
+
+            code, result = self.client.getData(url1)
+            if code==200:
+                result = json.loads(result)
+                output = pd.DataFrame(result['data'])
+                return output
+            else:
+                print code
+                print result
+                return None
+        except Exception, e:
+            raise e
+
+    def calcFactor_EP(self, params) :
         # 1. download the related data
         f_is = self.getData(self.form_funda_is, params) # from Income Statement
         f_is = f_is.sort(['publishDate', 'reportType'])
@@ -248,9 +279,17 @@ if __name__ == '__main__' :
     params['beginDate'] = datetime.strptime('20080101', '%Y%m%d')
     #params['endDate'] = datetime.today()
 
-    #ep = ff.getFactor_EP( params)
+    #ep = ff.calcFactor_EP( params)
     #print ep.columns
 
-    #test 2
-    days = ff.getTradingDays(start='20080101')
-    print days
+    '''test 2
+    '''
+    # days = ff.getTradingDays(start='20080101')
+    # print days
+
+    '''test 3
+    '''
+    params = {}
+    params['tradeDate'] = '20160216'
+    factors = ff.getStockFactors(params)
+    print factors
