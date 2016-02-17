@@ -35,12 +35,13 @@ class Settings :
     _table_price = 'Stock_Price_Daily'
     _table_info = 'Stock_Info'
 
-    _mongo_collection_batch_job_stock_daily_price = "BatchJobs_Stock_Price_Daily"
+    MONGO_COLL_Job_Daily = "Job_Daily"
     _mongo_collection_stock_daily_price = "Stock_Price_Daily"
     _mongo_collection_stock_daily_price_tmp = "Stock_Price_Daily_tmp"
     _mongo_collection_stock_info = "Stock_info"
 
-    _mongo_collection_equity_funda_is = "Equity_Funda_IS"
+    MONGO_COLL_Rawdata_Equity_Fundamental_IS = "RAW_Equity_IncomeStatment"
+    MONGO_COLL_Rawdata_Equity_Market = "RAW_Equity_Market"
 
     _mongo_port = 27017
     _mongo_conn_uri = 'mongodb://' + _mongo_hostname + ':' + str(_mongo_port)
@@ -84,7 +85,7 @@ class Settings :
 
     ### functions to get local mongo collections
     def get_mongo_coll_job(self):
-        return self.get_mongl_coll(self._mongo_collection_batch_job_stock_daily_price)
+        return self.get_mongl_coll(self.MONGO_COLL_Job_Daily)
 
     def get_mongo_coll_price_tmp(self):
         return self.get_mongl_coll(self._mongo_collection_stock_daily_price_tmp)
@@ -97,7 +98,10 @@ class Settings :
 
     ### mongo collections for equity fundamental
     def get_mongo_coll_equity_funda_is(self):
-        return self.get_mongl_coll(self._mongo_collection_equity_funda_is)
+        return self.get_mongl_coll(self.MONGO_COLL_Rawdata_Equity_Fundamental_IS)
+
+    def get_mongo_coll_mkt_eq(self):
+        return self.get_mongl_coll(self.MONGO_COLL_Rawdata_Equity_Market)
 
 
 
@@ -171,10 +175,54 @@ class JobManager :
     _taskmanager = None
     _factorfactory = None
 
+    JOB_STATUS_READY = 'ready'
+    JOB_STATUS_FAILED = 'failed'
+    JOB_STATUS_SUCCESS = 'success'
+
+    TASK_DOWNLOAD_MARKET_EQUITY = 'download_market_equity'
+    TASK_DOWNLOAD_MARKET_EQUITY_BYDATE = 'download_market_equity_dydate'
+
     def __init__(self, settings):
         self._settings = settings
         self._taskmanager = TaskManager(settings)
         self._factorfactory = factors.FactorFactory()
+
+    def processJob_Market_Equity_by_date(self):
+        while True:
+            jobs = self._settings.get_mongo_coll_job().find_one({'status':self.JOB_STATUS_READY, \
+                'task':self.TASK_DOWNLOAD_MARKET_EQUITY_BYDATE})
+            if jobs is None:
+                print 'No more job to process'
+                return
+
+            n_trials = 0
+            while n_trials <= self._settings.MAX_DOWNLOAD_TRIALS:
+                jobid = jobs['_id']
+                tradeDate = datetime.strptime(jobs['tradeDate'], '%Y-%m-%d').strftime('%Y%m%d')
+
+                params = {}
+                params['tradeDate'] = tradeDate
+                try :
+                    print "-------------------------------\n"
+                    print "Downloading Market Overview for the equity market for date:{tradeDate}".format(tradeDate=tradeDate)
+                    df_mk = self._factorfactory.getMarketEquity(params)
+                    print 'Uploading to Mongo Server\n'
+                    records = json.loads(df_mk.T.to_json()).values()
+                    self._settings.get_mongo_coll_mkt_eq().insert(records)
+
+                    print "Success"
+                    self.update_job_status(jobid, self.JOB_STATUS_SUCCESS)
+                    break
+                except:
+                    print "Failed"
+                    n_trials = n_trials + 1
+                    self.update_job_retry(jobid, n_trials)
+                    continue
+
+        pass
+
+
+
 
     def processJob_Fundamental_Equity_IS(self):
         while True:
@@ -194,6 +242,7 @@ class JobManager :
                     print "----------------------------\n"
                     print "Downloading Equity Income Statement for  " + code + "\n"
                     self.task_Fundamental_Equity_IS(code, start, end)
+
                     print "success "
                     self.update_job_status(jobid, -1)
                     break
@@ -205,17 +254,18 @@ class JobManager :
                     continue
                     # self._mongo_coll.find_one_and_update({"_id":jobid}, {"$set": {"status": 2}})
 
-    def task_Fundamental_Equity_IS(self, code, start=None, end=None):
+
+
+
+    def task_Fundamental_Equity_IS(self, code, start, end):
         try :
             print '---------------------------------------\n'
             print 'Downloading Equity Income Statement for {code}\n'.format(code=code)
             params = {}
             params['ticker'] = code
 
-            if start is not None:
-                params['beginDate'] = datetime.strptime(start, '%Y%m%d')
-            if end is not None:
-                params['endDate'] = datetime.strftime(end, '%Y%m%d')
+            params['beginDate'] = datetime.strptime(start, '%Y%m%d')
+            params['endDate'] = datetime.strftime(end, '%Y%m%d')
             df_is = self._factorfactory.getData(self._factorfactory.form_funda_cf, params)
 
             if df_is is None:
@@ -266,6 +316,10 @@ class JobManager :
         mongo_coll_jobs = self._settings.get_mongo_coll_job()
         mongo_coll_jobs.find_one_and_update({"_id": job_id}, {"$set": {"status": status}})
 
+    def update_job_retry(self, job_id, retries):
+        mongo_coll_jobs = self._settings.get_mongo_coll_job()
+        mongo_coll_jobs.find_one_and_update({"_id": job_id}, {"$set": {"retry": retries}})
+
     def get_all_stock_info(self):
         mongo_coll = self._settings.get_mongo_coll_info()
         df_stock_info = pd.DataFrame(list(mongo_coll.find()))
@@ -312,7 +366,27 @@ class JobManager :
 
         records = json.loads(jobs.T.to_json()).values()
         mongo_coll_jobs.insert(records)
-        print jobs
+
+
+    def addJob_Market_Equity_by_date(self, start=None, end=None ):
+        mongo_coll_jobs = self._settings.get_mongo_coll_job()
+        jobs = pd.DataFrame()
+
+        if end is None:
+            end = datetime.today().strftime('%Y%m%d')
+
+        if start is None:
+            jobs['tradeDate'] = {end}
+        else :
+            days = self._factorfactory.getTradingDays(start, end)
+            jobs['tradeDate'] = days.iloc[:, 0]
+
+        jobs['task'] = self.TASK_DOWNLOAD_MARKET_EQUITY_BYDATE
+        jobs['status'] = self.JOB_STATUS_READY
+        jobs['retry'] = 0
+
+        records = json.loads(jobs.T.to_json()).values()
+        mongo_coll_jobs.insert(records)
 
 
     def get_data_from_mongo(self):
@@ -337,5 +411,10 @@ if __name__ == '__main__' :
     #jobmgr.add_download_jobs('2016-01-01')
     #jobmgr.process_job_download_stock_daily_price()
 
+    # Test case 2:
     #jobmgr.addJob_Fundamental_Equity_IS()
-    jobmgr.processJob_Fundamental_Equity_IS()
+    #jobmgr.processJob_Fundamental_Equity_IS()
+
+    # Test case 3:
+    #jobmgr.addJob_Market_Equity_by_date('20080101')
+    jobmgr.processJob_Market_Equity_by_date()

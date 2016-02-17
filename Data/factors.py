@@ -80,7 +80,7 @@ class FactorFactory :
     form_funda_cf = '/api/fundamental/getFdmtCF.json'
     form_funda_is = '/api/fundamental/getFdmtIS.json'
     form_mkt_eq = '/api/market/getMktEqud.json'
-
+    form_master_cal = '/api/master/getTradeCal.json'
     client = None
 
     def __init__(self, token=None) :
@@ -94,8 +94,7 @@ class FactorFactory :
         try:
             ticker = params.get('ticker')
             if ticker is None:
-                print 'ticker is none'
-                return None
+                ticker=''
 
             field = params.get('field')
             if field is None:
@@ -135,6 +134,70 @@ class FactorFactory :
 
         except Exception, e:
             #traceback.print_exc()
+            raise e
+
+    def getTradingDays(self, start, end=None):
+        try :
+            form = self.form_master_cal
+            beginDate_str = start
+            if end is None:
+                endDate_str = datetime.today().strftime('%Y%m%d')
+            else :
+                endDate_str = end
+
+            exchangeCD = 'XSHG,XSHE' #by default XSHG/XSHE are shanghai and shenzhen exchanges
+            field = 'calendarDate,isOpen'
+
+            ### downloading data
+            url1='{form}?field={field}&exchangeCD={exchangeCD}&beginDate={beginDate}&endDate={endDate}'\
+                .format(form=form, field=field, exchangeCD=exchangeCD, beginDate=beginDate_str, endDate=endDate_str)
+            print url1
+
+            code, result = self.client.getData(url1)
+            if code==200:
+                result = json.loads(result)
+                days = pd.DataFrame(result['data'])
+                days = days[days['isOpen'] == 1]
+                days = days.sort('calendarDate', ascending=1)
+                return days[['calendarDate']]
+            else:
+                print code
+                print result
+                return None
+        except Exception, e:
+            raise e
+
+    def getMarketEquity(self, params):
+        try :
+            form = self.form_mkt_eq
+            beginDate = params.get('beginDate')
+            beginDate = '' if beginDate is None else beginDate
+            endDate = params.get('endDate')
+            endDate = '' if endDate is None else endDate
+            field = params.get('field')
+            field = '' if field is None else field
+            secID = params.get('secID')
+            secID = '' if secID is None else secID
+            ticker = params.get('ticker')
+            ticker = '' if ticker is None else ticker
+            tradeDate = params.get('tradeDate')
+            tradeDate = '' if tradeDate is None else tradeDate
+
+            ### downloading data
+            url1='{form}?field={field}&beginDate={beginDate}&endDate={endDate}&secID={secID}&ticker={ticker}&tradeDate={tradeDate}'\
+                .format(form=form, field=field, beginDate=beginDate, endDate=endDate,secID=secID,ticker=ticker,tradeDate=tradeDate)
+            print url1
+
+            code, result = self.client.getData(url1)
+            if code==200:
+                result = json.loads(result)
+                output = pd.DataFrame(result['data'])
+                return output
+            else:
+                print code
+                print result
+                return None
+        except Exception, e:
             raise e
 
     def getFactor_EP(self, params) :
@@ -182,8 +245,12 @@ if __name__ == '__main__' :
 
     params = {}
     params['ticker'] = '000001'
-    #params['beginDate'] = datetime.strptime('20080101', '%Y%m%d')
-    params['endDate'] = datetime.today()
+    params['beginDate'] = datetime.strptime('20080101', '%Y%m%d')
+    #params['endDate'] = datetime.today()
 
-    ep = ff.getFactor_EP( params)
-    print ep.columns
+    #ep = ff.getFactor_EP( params)
+    #print ep.columns
+
+    #test 2
+    days = ff.getTradingDays(start='20080101')
+    print days
