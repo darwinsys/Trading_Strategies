@@ -74,15 +74,12 @@ class Client:
             raise e
         return -1, result
 
-class Downloader :
+class FactorFactory :
     TOKEN = '20353207bd1bb251c0512ffa4a4fc28de0f6bf16bbdb41c89cb2b4ab8c458551'
 
-    form_cf = 'getFdmtCF.json'
-    form_earning_report = '/api/fundamental/getFdmtEe.json'
-    form_is = '/api/fundamental/getFdmtIS.json'
-    form_is_latest = '/api/fundamental/getFdmtISAllLatest.json'
+    form_funda_cf = '/api/fundamental/getFdmtCF.json'
+    form_funda_is = '/api/fundamental/getFdmtIS.json'
     form_mkt_eq = '/api/market/getMktEqud.json'
-    form_mkt_eq_adj = '/api/market/getMktEqudAdj.json'
 
     client = None
 
@@ -140,16 +137,9 @@ class Downloader :
             #traceback.print_exc()
             raise e
 
-
-
-class FactorFactory :
-
-    def __init__(self):
-        pass
-
-    def getFactor_EP(self, downloader, params) :
+    def getFactor_EP(self, params) :
         # 1. download the related data
-        f_is = downloader.getData(downloader.form_is, params) # from Income Statement
+        f_is = self.getData(self.form_funda_is, params) # from Income Statement
         f_is = f_is.sort(['publishDate', 'reportType'])
         f_is.drop_duplicates('publishDate', inplace=True)
         f_is = f_is.set_index('publishDate').sort()
@@ -166,7 +156,7 @@ class FactorFactory :
         f_earning.loc[:, 'Earning_LY'] = f_earning.loc[index_a, 'NIncome']
 
         # 3. download price and other information
-        f_price = downloader.getData(downloader.form_mkt_eq, params)
+        f_price = self.getData(self.form_mkt_eq, params)
         f_price = f_price.set_index('tradeDate').sort()
 
         # 4. create EP data
@@ -183,17 +173,17 @@ class FactorFactory :
         return f_ep
 
 
+
 from datetime import datetime
 import matplotlib
 
 if __name__ == '__main__' :
     ff = FactorFactory()
-    dd = Downloader()
 
     params = {}
     params['ticker'] = '000001'
     #params['beginDate'] = datetime.strptime('20080101', '%Y%m%d')
     params['endDate'] = datetime.today()
 
-    ep = ff.getFactor_EP(dd, params)
+    ep = ff.getFactor_EP( params)
     print ep.columns

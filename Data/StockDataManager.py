@@ -39,6 +39,7 @@ class Settings :
     _mongo_collection_stock_daily_price = "Stock_Price_Daily"
     _mongo_collection_stock_daily_price_tmp = "Stock_Price_Daily_tmp"
     _mongo_collection_stock_info = "Stock_info"
+
     _mongo_collection_equity_funda_is = "Equity_Funda_IS"
 
     _mongo_port = 27017
@@ -162,20 +163,79 @@ class TaskManager :
         #odo.odo(blaze.Data(df_1), Settings._mysql_url + '::' + Settings._table_price)
 
 
+import factors
+from datetime import datetime
 
 class JobManager :
     _settings = None
     _taskmanager = None
+    _factorfactory = None
 
     def __init__(self, settings):
         self._settings = settings
         self._taskmanager = TaskManager(settings)
+        self._factorfactory = factors.FactorFactory()
 
+    def processJob_Fundamental_Equity_IS(self):
+        while True:
+            jobs = self._settings.get_mongo_coll_job().find_one({'action':'EquityIS', 'status':0})
+            if jobs is None:
+                print "no more job to process"
+                return
+
+            n_trials = 0
+            while n_trials <= self._settings.MAX_DOWNLOAD_TRIALS:
+                jobid = jobs['_id']
+                code = jobs['code']
+                start = jobs['start']
+                end = jobs['end']
+
+                try :
+                    print "----------------------------\n"
+                    print "Downloading Equity Income Statement for  " + code + "\n"
+                    self.task_Fundamental_Equity_IS(code, start, end)
+                    print "success "
+                    self.update_job_status(jobid, -1)
+                    break
+                    # self._mongo_coll.find_one_and_update({"_id":jobid}, {"$set": {"status": 1}})
+                except:
+                    print "failed "
+                    n_trials = n_trials + 1
+                    self.update_job_status(jobid, n_trials)
+                    continue
+                    # self._mongo_coll.find_one_and_update({"_id":jobid}, {"$set": {"status": 2}})
+
+    def task_Fundamental_Equity_IS(self, code, start=None, end=None):
+        try :
+            print '---------------------------------------\n'
+            print 'Downloading Equity Income Statement for {code}\n'.format(code=code)
+            params = {}
+            params['ticker'] = code
+
+            if start is not None:
+                params['beginDate'] = datetime.strptime(start, '%Y%m%d')
+            if end is not None:
+                params['endDate'] = datetime.strftime(end, '%Y%m%d')
+            df_is = self._factorfactory.getData(self._factorfactory.form_funda_cf, params)
+
+            if df_is is None:
+                print 'Failed to download\n'
+                return
+            df_is['ticker'] = code
+
+            print 'Uploading to Mongo Server\n'
+            records = json.loads(df_is.T.to_json()).values()
+            self._settings.get_mongo_coll_equity_funda_is().insert(records)
+
+            print 'Success'
+        except Exception, e:
+            print 'Failed'
+            raise e
 
     def process_job_download_stock_daily_price(self):
         while True:
             # jobs = mongo_coll_job.find_one({'status': 0})
-            jobs = self._settings.get_mongo_coll_job().find_one({'status': 0})
+            jobs = self._settings.get_mongo_coll_job().find_one({'$and'[{'action':'load'}, {'status': 0 }]})
             if jobs is None:
                 print "no more job to process!"
                 return
@@ -192,17 +252,17 @@ class JobManager :
                     print "loading " + code + "\n"
                     self._taskmanager.load_stock_price_into_db(code, start, end)
                     print "success "
-                    self.update_job_download_stock_daily_price(jobid, -1)
+                    self.update_job_status(jobid, -1)
                     break
                     # self._mongo_coll.find_one_and_update({"_id":jobid}, {"$set": {"status": 1}})
                 except:
                     print "failed "
                     n_trials = n_trials + 1
-                    self.update_job_download_stock_daily_price(jobid, n_trials)
+                    self.update_job_status(jobid, n_trials)
                     continue
                     # self._mongo_coll.find_one_and_update({"_id":jobid}, {"$set": {"status": 2}})
 
-    def update_job_download_stock_daily_price(self, job_id, status):
+    def update_job_status(self, job_id, status):
         mongo_coll_jobs = self._settings.get_mongo_coll_job()
         mongo_coll_jobs.find_one_and_update({"_id": job_id}, {"$set": {"status": status}})
 
@@ -235,8 +295,24 @@ class JobManager :
         mongo_coll_jobs.insert(records)
         print jobs
 
-    def addJob_Fundamental_Equity_IS(self, codes):
+    def addJob_Fundamental_Equity_IS(self, codes=None, start=None, end=None):
         mongo_coll_jobs = self._settings.get_mongo_coll_job()
+        jobs = pd.DataFrame()
+
+        if codes is None:
+            infos = self.get_all_stock_info()
+            codes = infos['code']
+
+        jobs['code'] = codes
+        jobs['action'] = 'EquityIS'
+        jobs['start'] = start
+        jobs['end'] = end
+
+        jobs['status'] = 0
+
+        records = json.loads(jobs.T.to_json()).values()
+        mongo_coll_jobs.insert(records)
+        print jobs
 
 
     def get_data_from_mongo(self):
@@ -259,4 +335,7 @@ if __name__ == '__main__' :
     settings = Settings()
     jobmgr = JobManager(settings)
     #jobmgr.add_download_jobs('2016-01-01')
-    jobmgr.process_job_download_stock_daily_price()
+    #jobmgr.process_job_download_stock_daily_price()
+
+    #jobmgr.addJob_Fundamental_Equity_IS()
+    jobmgr.processJob_Fundamental_Equity_IS()
