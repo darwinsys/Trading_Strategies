@@ -481,7 +481,7 @@ if __name__ == '__main__' :
     #jobmgr.processJob_Fundamental_Equity_IS()
 
     # Test case 3:
-    #jobmgr.addJob_DownloadEquityMktByDate('20160101')
+    #jobmgr.addJob_DownloadEquityMktByDate(start='20140101')
     jobmgr.processJob_DownloadEquityMktByDate()
 
     # Test case 4:
