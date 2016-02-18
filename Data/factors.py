@@ -147,7 +147,7 @@ class FactorFactory :
             else :
                 endDate_str = end
 
-            exchangeCD = 'XSHG,XSHE' #by default XSHG/XSHE are shanghai and shenzhen exchanges
+            exchangeCD = 'XSHG' #by default XSHG/XSHE are shanghai and shenzhen exchanges
             field = 'calendarDate,isOpen'
 
             ### downloading data

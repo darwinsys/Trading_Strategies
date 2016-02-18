@@ -199,7 +199,7 @@ class JobManager :
                 return
 
             n_trials = 0
-            while n_trials <= self._settings.MAX_DOWNLOAD_TRIALS:
+            while True:
                 jobid = jobs['_id']
                 tradeDate = datetime.strptime(jobs['tradeDate'], '%Y-%m-%d').strftime('%Y%m%d')
 
@@ -218,10 +218,12 @@ class JobManager :
                     break
                 except:
                     print "Failed"
-                    n_trials = n_trials + 1
                     self.update_job_retry(jobid, n_trials)
-                    continue
-            self.update_job_status(jobid, self.JOB_STATUS_FAILED)
+                    n_trials = n_trials + 1
+                    if n_trials > self._settings.MAX_DOWNLOAD_TRIALS:
+                        self.update_job_status(jobid, self.JOB_STATUS_FAILED)
+                        break
+
         pass
 
     def processJob_DownloadStockFactorByDate(self):
@@ -233,7 +235,7 @@ class JobManager :
                 return
 
             n_trials = 0
-            while n_trials <= self._settings.MAX_DOWNLOAD_TRIALS:
+            while True:
                 jobid = jobs['_id']
                 tradeDate = datetime.strptime(jobs['tradeDate'], '%Y-%m-%d').strftime('%Y%m%d')
 
@@ -252,10 +254,12 @@ class JobManager :
                     break
                 except:
                     print "Failed"
-                    n_trials = n_trials + 1
                     self.update_job_retry(jobid, n_trials)
-                    continue
-            self.update_job_status(jobid, self.JOB_STATUS_FAILED)
+                    n_trials = n_trials + 1
+                    if n_trials > self._settings.MAX_DOWNLOAD_TRIALS:
+                        self.update_job_status(jobid, self.JOB_STATUS_FAILED)
+                        break
+
         pass
 
 
@@ -345,7 +349,13 @@ class JobManager :
                     n_trials = n_trials + 1
                     self.update_job_status(jobid, n_trials)
                     continue
-                    # self._mongo_coll.find_one_and_update({"_id":jobid}, {"$set": {"status": 2}})
+                    # self._mongo_coll.find_one_and_update({"_id":jobid}, {"$set": {"status": 2}}
+
+    def restart_failed_jobs(self):
+        result = self._settings.get_mongo_coll_job().update_many({'status':self.JOB_STATUS_FAILED}, \
+            {'$set':{'status':self.JOB_STATUS_READY}})
+        print 'success '
+
 
     def update_job_status(self, job_id, status):
         mongo_coll_jobs = self._settings.get_mongo_coll_job()
@@ -462,6 +472,7 @@ class JobManager :
 if __name__ == '__main__' :
     settings = Settings()
     jobmgr = JobManager(settings)
+    #jobmgr.restart_failed_jobs()
     #jobmgr.add_download_jobs('2016-01-01')
     #jobmgr.process_job_download_stock_daily_price()
 
@@ -470,9 +481,9 @@ if __name__ == '__main__' :
     #jobmgr.processJob_Fundamental_Equity_IS()
 
     # Test case 3:
-    #jobmgr.addJob_DownloadEquityMktByDate('20080101')
-    #jobmgr.processJob_DownloadEquityMktByDate()
+    #jobmgr.addJob_DownloadEquityMktByDate('20160101')
+    jobmgr.processJob_DownloadEquityMktByDate()
 
     # Test case 4:
     #jobmgr.addJob_DownloadStockFactorByDate('20080101')
-    jobmgr.processJob_DownloadStockFactorByDate()
+    #jobmgr.processJob_DownloadStockFactorByDate()
