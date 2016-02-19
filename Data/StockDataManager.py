@@ -43,6 +43,8 @@ class Settings :
     MONGO_COLL_Rawdata_Equity_Fundamental_IS = "RAW_Equity_IncomeStatment"
     MONGO_COLL_Rawdata_Equity_Market = "RAW_Equity_Market"
     MONGO_COLL_Rawdata_Equity_Factors = "RAW_Equity_Factors"
+    MONGO_COLL_Rawdata_Index_Information = "RAW_Index_Information"
+    MONGO_COLL_Rawdata_Index_Components = "RAW_Index_Components"
 
     _mongo_port = 27017
     _mongo_conn_uri = 'mongodb://' + _mongo_hostname + ':' + str(_mongo_port)
@@ -86,31 +88,34 @@ class Settings :
 
     ### functions to get local mongo collections
     def get_mongo_coll_job(self):
-        return self.get_mongl_coll(self.MONGO_COLL_Job_Daily)
+        return self.get_mongo_coll(self.MONGO_COLL_Job_Daily)
 
     def get_mongo_coll_price_tmp(self):
-        return self.get_mongl_coll(self._mongo_collection_stock_daily_price_tmp)
+        return self.get_mongo_coll(self._mongo_collection_stock_daily_price_tmp)
 
     def get_mongo_coll_price(self):
-        return self.get_mongl_coll(self._mongo_collection_stock_daily_price)
+        return self.get_mongo_coll(self._mongo_collection_stock_daily_price)
 
     def get_mongo_coll_info(self):
-        return self.get_mongl_coll(self._mongo_collection_stock_info)
+        return self.get_mongo_coll(self._mongo_collection_stock_info)
 
     ### mongo collections for equity fundamental
     def get_mongo_coll_equity_funda_is(self):
-        return self.get_mongl_coll(self.MONGO_COLL_Rawdata_Equity_Fundamental_IS)
+        return self.get_mongo_coll(self.MONGO_COLL_Rawdata_Equity_Fundamental_IS)
 
-    def get_mongo_coll_mkt_eq(self):
-        return self.get_mongl_coll(self.MONGO_COLL_Rawdata_Equity_Market)
+    def get_mongo_coll_equity_market(self):
+        return self.get_mongo_coll(self.MONGO_COLL_Rawdata_Equity_Market)
 
     def get_mongo_coll_eq_factors(self):
-        return self.get_mongl_coll(self.MONGO_COLL_Rawdata_Equity_Factors)
+        return self.get_mongo_coll(self.MONGO_COLL_Rawdata_Equity_Factors)
 
+    def get_mongo_coll_index_info(self):
+        return self.get_mongo_coll(self.MONGO_COLL_Rawdata_Index_Information)
 
+    def get_mongo_coll_index_components(self):
+        return self.get_mongo_coll(self.MONGO_COLL_Rawdata_Index_Components)
 
-
-    def get_mongl_coll(self, name_coll):
+    def get_mongo_coll(self, name_coll):
         mongo_db = self.get_mongo_db()
         return mongo_db[name_coll]
 
@@ -211,7 +216,7 @@ class JobManager :
                     df_mk = self._factorfactory.getMarketEquity(params)
                     print 'Uploading to Mongo Server\n'
                     records = json.loads(df_mk.T.to_json()).values()
-                    self._settings.get_mongo_coll_mkt_eq().insert(records)
+                    self._settings.get_mongo_coll_equity_market().insert(records)
 
                     print "Success"
                     self.update_job_status(jobid, self.JOB_STATUS_SUCCESS)
@@ -293,8 +298,24 @@ class JobManager :
                     continue
                     # self._mongo_coll.find_one_and_update({"_id":jobid}, {"$set": {"status": 2}})
 
+    def task_UpdateIndexInfo(self) :
+        params = {}
+        df_ind = self._factorfactory.getIndexInfo(params)
+        records = json.loads(df_ind.T.to_json()).values()
 
+         # remove the old information in the
+        coll = self._settings.get_mongo_coll_index_info()
+        coll.delete_many({})
+        coll.insert(records)
 
+    def task_UpdateIndexComponents(self):
+        params = {}
+        df_ind_con = self._factorfactory.getIndexComponents(params)
+        records = json.loads(df_ind_con.T.to_json()).values()
+
+        coll = self._settings.get_mongo_coll_index_components()
+        coll.delete_many({})
+        coll.insert(records)
 
     def task_Fundamental_Equity_IS(self, code, start, end):
         try :
@@ -472,18 +493,29 @@ class JobManager :
 if __name__ == '__main__' :
     settings = Settings()
     jobmgr = JobManager(settings)
+
+    ''' Test case 1:
+    '''
     #jobmgr.restart_failed_jobs()
     #jobmgr.add_download_jobs('2016-01-01')
     #jobmgr.process_job_download_stock_daily_price()
 
-    # Test case 2:
+    ''' Test case 2:
+    '''
     #jobmgr.addJob_Fundamental_Equity_IS()
     #jobmgr.processJob_Fundamental_Equity_IS()
 
-    # Test case 3:
+    ''' Test case 3:
+    '''
     #jobmgr.addJob_DownloadEquityMktByDate(start='20140101')
-    jobmgr.processJob_DownloadEquityMktByDate()
+    #jobmgr.processJob_DownloadEquityMktByDate()
 
-    # Test case 4:
-    #jobmgr.addJob_DownloadStockFactorByDate('20080101')
+    ''' Test case 4:
+    '''
+    #jobmgr.addJob_DownloadStockFactorByDate(start='20080101', end='20151231')
     #jobmgr.processJob_DownloadStockFactorByDate()
+
+    ''' Test case 5:
+    '''
+    #jobmgr.task_UpdateIndexInfo()
+    jobmgr.task_UpdateIndexComponents()

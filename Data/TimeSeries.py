@@ -38,6 +38,25 @@ class TimeSeries :
 
         return di_data
 
+    def get_equity_market_values(self, field = None, tickers = None, start = None, end = None):
+        mongo_coll_eqMkt = self._settings.get_mongo_coll_equity_market()
+        df_mkt = pd.DataFrame()
+        if tickers is not None:
+            for ticker in tickers :
+                query = mongo_coll_eqMkt.find({'ticker': ticker})
+                df_fields = pd.DataFrame(list(query))
+
+
+        return df_mkt
+
+def get_data_from_mongo(self):
+        mongo_coll_price = self._settings.get_mongo_coll_price()
+
+        df_prices = pd.DataFrame(list(mongo_coll_price.find()))
+        df_prices['date'] = pd.to_datetime(df_prices['date'] * 1000 * 1000)
+        df_prices = df_prices.set_index('date')
+        df_prices = df_prices.sort_index()
+        return df_prices
 
 
 
@@ -46,5 +65,6 @@ if __name__ == '__main__' :
     settings = sdm.Settings()
     ts = TimeSeries(settings)
 
-    data = ts.get_stock_series(['300382', '603008'], start='2015-01-01', fields=['open', 'close'])
-    data1 = ts.get_stock_series(['300382', '603008'], start='2015-01-01')
+    #data = ts.get_stock_series(['300382', '603008'], start='2015-01-01', fields=['open', 'close'])
+    #data1 = ts.get_stock_series(['300382', '603008'], start='2015-01-01')
+    data = ts.get_equity_market_values()
