@@ -46,10 +46,11 @@ class Settings :
 
     _mongo_port = 27017
     _mongo_conn_uri = 'mongodb://' + _mongo_hostname + ':' + str(_mongo_port)
-
     _mongo_db_name = "darwin_test"
 
     _mongo_conn = None
+
+    SQLITE_ENGINE = 'sqlite:///darwin_factors.db'
 
     def __init__(self):
         self._mongo_conn = self.get_mongo_conn()
@@ -472,7 +473,7 @@ class JobManager :
 if __name__ == '__main__' :
     settings = Settings()
     jobmgr = JobManager(settings)
-    #jobmgr.restart_failed_jobs()
+    jobmgr.restart_failed_jobs()
     #jobmgr.add_download_jobs('2016-01-01')
     #jobmgr.process_job_download_stock_daily_price()
 
@@ -482,8 +483,8 @@ if __name__ == '__main__' :
 
     # Test case 3:
     #jobmgr.addJob_DownloadEquityMktByDate(start='20140101')
-    jobmgr.processJob_DownloadEquityMktByDate()
+    #jobmgr.processJob_DownloadEquityMktByDate()
 
     # Test case 4:
     #jobmgr.addJob_DownloadStockFactorByDate('20080101')
-    #jobmgr.processJob_DownloadStockFactorByDate()
+    jobmgr.processJob_DownloadStockFactorByDate()
