@@ -27,6 +27,10 @@ class Settings :
     _mysql_url = "mysql+pymysql://{user}:{passwd}@{host}/{db}".format(user=_mysql_username, passwd=_mysql_password,
             host=_mysql_hostname, db=_mysql_database)
 
+    _sqlite_db = '/home/jianbo/sqlite_db/darwinlab.db'
+    _sqlite_url = "sqlite://{path}".format(path=_sqlite_db)
+    _sqlite_engine = None
+
     _mysql_engine = None
     _mysql_conn = None
     _mysql_metadata = None
@@ -65,6 +69,10 @@ class Settings :
     def get_mongo_db(self):
         self.get_mongo_conn()
         return self._mongo_conn[self._mongo_db_name]
+
+    def get_sqlite_engine(self):
+        if self._sqlite_engine is None:
+            self._sqlite_engine = create_engine(Settings._sqlite_url, echo=True)
 
     def get_mysql_engine(self):
         if self._mysql_engine is None :

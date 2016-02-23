@@ -14,67 +14,71 @@ class Client:
     token = ''
     httpClient = None
 
-    def __init__( self ):
+    def __init__(self):
         self.httpClient = httplib.HTTPSConnection(self.domain, self.port)
 
-    def __del__( self ):
+    def __del__(self):
         if self.httpClient is not None:
             self.httpClient.close()
 
     def encodepath(self, path):
-        start=0
-        n=len(path)
-        re=''
-        i=path.find('=',start)
-        while i!=-1 :
-            re+=path[start:i+1]
-            start=i+1
-            i=path.find('&',start)
-            if(i>=0):
-                for j in range(start,i):
-                    if(path[j]>'~'):
-                        re+=urllib.quote(path[j])
+        start = 0
+        n = len(path)
+        re = ''
+        i = path.find('=', start)
+        while i != -1:
+            re += path[start:i + 1]
+            start = i + 1
+            i = path.find('&', start)
+            if (i >= 0):
+                for j in range(start, i):
+                    if (path[j] > '~'):
+                        re += urllib.quote(path[j])
                     else:
-                        re+=path[j]
-                re+='&'
-                start=i+1
+                        re += path[j]
+                re += '&'
+                start = i + 1
             else:
-                for j in range(start,n):
-                    if(path[j]>'~'):
-                        re+=urllib.quote(path[j])
+                for j in range(start, n):
+                    if (path[j] > '~'):
+                        re += urllib.quote(path[j])
                     else:
-                        re+=path[j]
-                start=n
-            i=path.find('=',start)
+                        re += path[j]
+                start = n
+            i = path.find('=', start)
         return re
 
     def init(self, token):
-        self.token=token
+        self.token = token
 
     def getData(self, path):
         result = None
-        path='/data/v1'+path
-        path=self.encodepath(path)
+        path = '/data/v1' + path
+        path = self.encodepath(path)
         try:
-            #set http header here
-            self.httpClient.request('GET', path, headers = {"Authorization": "Bearer " + self.token})
-            #make request
+            # set http header here
+            self.httpClient.request('GET', path, headers={"Authorization": "Bearer " + self.token})
+            # make request
             response = self.httpClient.getresponse()
-            #read result
+            # read result
             if response.status == self.HTTP_OK:
-                #parse json into python primitive object
+                # parse json into python primitive object
                 result = response.read()
             else:
                 result = response.read()
-            if(path.find('.csv?')!=-1):
-                result=result.decode('GB2312').encode('utf-8')
+            if (path.find('.csv?') != -1):
+                result = result.decode('GB2312').encode('utf-8')
             return response.status, result
         except Exception, e:
-            #traceback.print_exc()
+            # traceback.print_exc()
             raise e
         return -1, result
 
-class FactorFactory :
+
+import StockDataManager as sdm
+
+
+class FactorFactory:
     TOKEN = '20353207bd1bb251c0512ffa4a4fc28de0f6bf16bbdb41c89cb2b4ab8c458551'
 
     form_funda_cf = '/api/fundamental/getFdmtCF.json'
@@ -86,19 +90,22 @@ class FactorFactory :
     form_index_components = '/api/idx/getIdxCons.json'
 
     client = None
+    settings = None
 
-    def __init__(self, token=None) :
+    def __init__(self, token=None):
         if token is not None:
             self.TOKEN = token
         if self.client is None:
             self.client = Client()
             self.client.init(self.TOKEN)
+        if self.settings is None:
+            self.settings = sdm.Settings()
 
-    def getData(self, form, params) :
+    def getData(self, form, params):
         try:
             ticker = params.get('ticker')
             if ticker is None:
-                ticker=''
+                ticker = ''
 
             field = params.get('field')
             if field is None:
@@ -110,25 +117,25 @@ class FactorFactory :
 
             beginDate = params.get('beginDate')
             endDate = params.get('endDate')
-            if (beginDate is None) or (endDate is None) :
+            if (beginDate is None) or (endDate is None):
                 beginDate_str = ''
                 endDate_str = ''
-            else :
+            else:
                 beginDate_str = beginDate.strftime('%Y%m%d')
                 endDate_str = endDate.strftime('%Y%m%d')
 
-            url1='{form}?field={field}&secID={secID}&ticker={ticker}&beginDate={beginDate}&endDate={endDate}'\
-                .format(form=form, field=field, secID = secID, ticker=ticker, \
+            url1 = '{form}?field={field}&secID={secID}&ticker={ticker}&beginDate={beginDate}&endDate={endDate}' \
+                .format(form=form, field=field, secID=secID, ticker=ticker, \
                         beginDate=beginDate_str, endDate=endDate_str)
             print url1
 
             code, result = self.client.getData(url1)
-            if code==200:
+            if code == 200:
                 result = json.loads(result)
                 df = pd.DataFrame(result['data'])
-                #df['publishDate'] = pd.to_datetime(df['publishDate'])
-                #df.rename(columns={'publishDate':'date'}, inplace=True)
-                #df.set_index('date', inplace=True)
+                # df['publishDate'] = pd.to_datetime(df['publishDate'])
+                # df.rename(columns={'publishDate':'date'}, inplace=True)
+                # df.set_index('date', inplace=True)
                 return df
             else:
                 print code
@@ -137,32 +144,32 @@ class FactorFactory :
                 return None
 
         except Exception, e:
-            #traceback.print_exc()
+            # traceback.print_exc()
             raise e
 
     def getTradingDays(self, start, end=None):
-        try :
+        try:
             form = self.form_master_cal
             beginDate_str = start
             if end is None:
                 endDate_str = datetime.today().strftime('%Y%m%d')
-            else :
+            else:
                 endDate_str = end
 
-            exchangeCD = 'XSHG' #by default XSHG/XSHE are shanghai and shenzhen exchanges
+            exchangeCD = 'XSHG'  # by default XSHG/XSHE are shanghai and shenzhen exchanges
             field = 'calendarDate,isOpen'
 
             ### downloading data
-            url1='{form}?field={field}&exchangeCD={exchangeCD}&beginDate={beginDate}&endDate={endDate}'\
+            url1 = '{form}?field={field}&exchangeCD={exchangeCD}&beginDate={beginDate}&endDate={endDate}' \
                 .format(form=form, field=field, exchangeCD=exchangeCD, beginDate=beginDate_str, endDate=endDate_str)
             print url1
 
             code, result = self.client.getData(url1)
-            if code==200:
+            if code == 200:
                 result = json.loads(result)
                 days = pd.DataFrame(result['data'])
                 days = days[days['isOpen'] == 1]
-                #days = days.sort('calendarDate', ascending=1)
+                # days = days.sort('calendarDate', ascending=1)
                 return days[['calendarDate']]
             else:
                 print code
@@ -172,7 +179,7 @@ class FactorFactory :
             raise e
 
     def getIndexInfo(self, params):
-        try :
+        try:
             form = self.form_index_info
             field = params.get('field')
             field = '' if field is None else field
@@ -182,12 +189,12 @@ class FactorFactory :
             secID = '' if secID is None else secID
 
             ### downloand data
-            url1 = '{form}?field={field}&ticker={ticker}&secID={secID}'\
+            url1 = '{form}?field={field}&ticker={ticker}&secID={secID}' \
                 .format(form=form, field=field, ticker=ticker, secID=secID)
             print url1
 
             code, result = self.client.getData(url1)
-            if code==200:
+            if code == 200:
                 result = json.loads(result)
                 output = pd.DataFrame(result['data'])
                 return output
@@ -199,7 +206,7 @@ class FactorFactory :
             raise e
 
     def getIndexComponents(self, params):
-        try :
+        try:
             form = self.form_index_components
             field = params.get('field')
             field = '' if field is None else field
@@ -213,12 +220,12 @@ class FactorFactory :
             isNew = '' if isNew is None else isNew
 
             ### downloand data
-            url1 = '{form}?field={field}&ticker={ticker}&secID={secID}&intoDate={intoDate}&isNew={isNew}'\
+            url1 = '{form}?field={field}&ticker={ticker}&secID={secID}&intoDate={intoDate}&isNew={isNew}' \
                 .format(form=form, field=field, ticker=ticker, secID=secID, intoDate=intoDate, isNew=isNew)
             print url1
 
             code, result = self.client.getData(url1)
-            if code==200:
+            if code == 200:
                 result = json.loads(result)
                 output = pd.DataFrame(result['data'])
                 return output
@@ -230,7 +237,7 @@ class FactorFactory :
             raise e
 
     def getMarketEquity(self, params):
-        try :
+        try:
             form = self.form_mkt_eq
             beginDate = params.get('beginDate')
             beginDate = '' if beginDate is None else beginDate
@@ -246,12 +253,13 @@ class FactorFactory :
             tradeDate = '' if tradeDate is None else tradeDate
 
             ### downloading data
-            url1='{form}?field={field}&beginDate={beginDate}&endDate={endDate}&secID={secID}&ticker={ticker}&tradeDate={tradeDate}'\
-                .format(form=form, field=field, beginDate=beginDate, endDate=endDate,secID=secID,ticker=ticker,tradeDate=tradeDate)
+            url1 = '{form}?field={field}&beginDate={beginDate}&endDate={endDate}&secID={secID}&ticker={ticker}&tradeDate={tradeDate}' \
+                .format(form=form, field=field, beginDate=beginDate, endDate=endDate, secID=secID, ticker=ticker,
+                        tradeDate=tradeDate)
             print url1
 
             code, result = self.client.getData(url1)
-            if code==200:
+            if code == 200:
                 result = json.loads(result)
                 output = pd.DataFrame(result['data'])
                 return output
@@ -263,7 +271,7 @@ class FactorFactory :
             raise e
 
     def getStockFactors(self, params):
-        try :
+        try:
             form = self.form_mkt_factor_oneday
             field = params.get('field')
             field = '' if field is None else field
@@ -275,12 +283,12 @@ class FactorFactory :
             tradeDate = '' if tradeDate is None else tradeDate
 
             ### downloading data
-            url1='{form}?field={field}&secID={secID}&ticker={ticker}&tradeDate={tradeDate}'\
-                .format(form=form, field=field, secID=secID,ticker=ticker,tradeDate=tradeDate)
+            url1 = '{form}?field={field}&secID={secID}&ticker={ticker}&tradeDate={tradeDate}' \
+                .format(form=form, field=field, secID=secID, ticker=ticker, tradeDate=tradeDate)
             print url1
 
             code, result = self.client.getData(url1)
-            if code==200:
+            if code == 200:
                 result = json.loads(result)
                 output = pd.DataFrame(result['data'])
                 return output
@@ -291,21 +299,61 @@ class FactorFactory :
         except Exception, e:
             raise e
 
-    def calcFactor_EP(self, params) :
+    ## calc Returns
+    def update_returns(self):
+        try:
+            coll_eq_mkt = self.settings.get_mongo_coll_equity_market()
+
+            # get mysql connection
+            db_conn = self.settings.get_sqlite_engine()
+            # get all the stock
+            ids = coll_eq_mkt.distinct('ticker')
+            for ticker in ids:
+                query_prices = coll_eq_mkt.find({'ticker': ticker}).sort('tradeDate', 1)
+
+                df_prices = pd.DataFrame(list(query_prices))
+
+                df_returns = pd.DataFrame()
+                df_returns['date'] = df_prices['tradeDate']
+                df_returns.set_index('date', inplace=True)
+
+                # price information
+                df_returns['open'] = df_prices['openPrice'] * df_prices['accumAdjFactor']
+                df_returns['high'] = df_prices['highestPrice'] * df_prices['accumAdjFactor']
+                df_returns['low'] = df_prices['lowPrice'] * df_prices['accumAdjFactor']
+                df_returns['close'] = df_prices['closePrice'] * df_prices['accumAdjFactor']
+                df_returns['turnoverValue'] = df_prices['turnoverValue']
+
+                # return information
+                df_returns['ret_cc'] = df_returns['close'] / df_returns['close'].shift(1) - 1
+                df_returns['ret_cc_2'] = df_returns['close'] / df_returns['close'].shift(2) - 1
+                df_returns['ret_cc_5'] == df_returns['close'] / df_returns['close'].shift(5) - 1
+                df_returns['ret_cc_10'] = df_returns['close'] / df_returns['close'].shift(10) - 1
+                df_returns['ret_cc_20'] = df_returns['close'] / df_returns['close'].shift(20) - 1
+                df_returns['ret_cc_60'] = df_returns['close'] / df_returns['close'].shift(60) - 1
+
+                df_returns.to_sql('price', db_conn, if_exists='append')
+
+
+
+        except Exception, e:
+            raise e
+
+    def calcFactor_EP(self, params):
         # 1. download the related data
-        f_is = self.getData(self.form_funda_is, params) # from Income Statement
+        f_is = self.getData(self.form_funda_is, params)  # from Income Statement
         f_is = f_is.sort(['publishDate', 'reportType'])
         f_is.drop_duplicates('publishDate', inplace=True)
         f_is = f_is.set_index('publishDate').sort()
 
         # 2. cleaning earning data.
         f_earning = f_is[['reportType', 'NIncome']]
-        f_earning.loc[:, 'Earning_Q'] = f_earning.loc[:, 'NIncome'] - f_earning.loc[:,'NIncome'].shift(1)
+        f_earning.loc[:, 'Earning_Q'] = f_earning.loc[:, 'NIncome'] - f_earning.loc[:, 'NIncome'].shift(1)
         f_earning.head()
         index_q1 = f_earning.loc[:, 'reportType'] == 'Q1'
         index_a = f_earning.loc[:, 'reportType'] == 'A'
         f_earning.loc[index_q1, 'Q'] = f_earning.loc[index_q1, 'NIncome']
-        f_earning.loc[:,'Earning_TTM'] = pd.rolling_sum(f_earning['Earning_Q'], 4)
+        f_earning.loc[:, 'Earning_TTM'] = pd.rolling_sum(f_earning['Earning_Q'], 4)
         f_earning.loc[:, 'Earning_FY0'] = f_earning.loc[:, 'Earning_Q'] * 4
         f_earning.loc[:, 'Earning_LY'] = f_earning.loc[index_a, 'NIncome']
 
@@ -318,30 +366,28 @@ class FactorFactory :
         f_ep = f_ep.join(f_earning[['Earning_Q', 'Earning_TTM', 'Earning_FY0', 'Earning_LY']], how='outer')
         f_ep = f_ep.ffill().dropna()
 
-        f_ep.rename(columns = {'marketValue' : 'MV'}, inplace=True)
+        f_ep.rename(columns={'marketValue': 'MV'}, inplace=True)
 
         f_ep['EP_TTM'] = f_ep['Earning_TTM'] / f_ep['MV']
         f_ep['EP_FY0'] = f_ep['Earning_FY0'] / f_ep['MV']
         f_ep['EP_LY'] = f_ep['Earning_LY'] / f_ep['MV']
-        f_ep['PE_TTM'] = 1/f_ep['EP_TTM']
+        f_ep['PE_TTM'] = 1 / f_ep['EP_TTM']
         return f_ep
-
-
 
 
 from datetime import datetime
 import matplotlib
 
-if __name__ == '__main__' :
+if __name__ == '__main__':
     ff = FactorFactory()
 
     params = {}
     params['ticker'] = '000001'
     params['beginDate'] = datetime.strptime('20080101', '%Y%m%d')
-    #params['endDate'] = datetime.today()
+    # params['endDate'] = datetime.today()
 
-    #ep = ff.calcFactor_EP( params)
-    #print ep.columns
+    # ep = ff.calcFactor_EP( params)
+    # print ep.columns
 
     '''test 2
     '''
@@ -357,12 +403,15 @@ if __name__ == '__main__' :
 
     '''test 4
     '''
-    params={}
-    indices = ff.getIndexInfo(params)
-    indices_info = indices[['secID', 'secShortName']]
-    print indices_info
+    # params={}
+    # indices = ff.getIndexInfo(params)
+    # indices_info = indices[['secID', 'secShortName']]
+    # print indices_info
+    #
+    # params['secID'] = indices_info.loc[1, 'secID']
+    # universe = ff.getIndexComponents(params)
+    # universe_tickers = universe['consTickerSymbol']
+    # print universe_tickers
 
-    params['secID'] = indices_info.loc[1, 'secID']
-    universe = ff.getIndexComponents(params)
-    universe_tickers = universe['consTickerSymbol']
-    print universe_tickers
+
+    ff.update_returns()
