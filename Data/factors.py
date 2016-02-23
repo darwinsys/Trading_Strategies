@@ -374,6 +374,16 @@ class FactorFactory:
         f_ep['PE_TTM'] = 1 / f_ep['EP_TTM']
         return f_ep
 
+class RiskFactor :
+    def __init__(self, settings):
+        self.settings = settings
+
+    def get_PE(self, params):
+        beginDate = params.get('beginDate')
+        endDate = params.get('endDate')
+        uniTicker = params.get('uniTicker')
+
+
 
 from datetime import datetime
 import matplotlib
