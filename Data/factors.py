@@ -353,12 +353,13 @@ class FactorFactory:
                 df_returns['ret_cc_20'] = df_returns['close'] / df_returns['close'].shift(20) - 1
                 df_returns['ret_cc_60'] = df_returns['close'] / df_returns['close'].shift(60) - 1
 
+
+                df_returns.set_index('date', inplace=True)
                 df_returns = df_returns.dropna()
-                #df_returns.set_index('date', inplace=True)
 
                 try :
                     print ("--- loading to db")
-                    df_returns.to_sql('Stock_Price', db_engine, index=False, if_exists='append')
+                    df_returns.to_sql('Stock_Price', db_engine, index=True, if_exists='append')
                     #import odo
                     #odo.odo(df_returns, tl_prices )
                     print ("---Success")
