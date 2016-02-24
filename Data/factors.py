@@ -310,7 +310,7 @@ class FactorFactory:
             tl_prices = Table('Stock_Price', metadata,
                               Column('date', String(10), nullable=False),
                               Column('ticker', String(10), nullable=False),
-                              Column('id', String(20), primary_key=True),
+                              Column('id', String(20), nullable=False),
                               Column('open', Float),
                               Column('high', Float),
                               Column('low', Float),
