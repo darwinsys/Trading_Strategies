@@ -355,7 +355,7 @@ class FactorFactory:
 
                 try :
                     print ("--- loading to db")
-                    df_returns.to_sql('Stock_Price', db_engine, if_exists='append', flavor='mysql')
+                    df_returns.to_sql('Stock_Price', db_engine, if_exists='append')
                     print ("---Success")
                 except:
                     print "--- Failed"
