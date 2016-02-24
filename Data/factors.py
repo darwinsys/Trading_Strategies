@@ -358,9 +358,9 @@ class FactorFactory:
 
                 try :
                     print ("--- loading to db")
-                    #df_returns.to_sql('Stock_Price', db_engine, index=True, if_exists='append')
-                    import odo
-                    odo.odo(df_returns, tl_prices )
+                    df_returns.to_sql('Stock_Price', db_engine, index=False, if_exists='append')
+                    #import odo
+                    #odo.odo(df_returns, tl_prices )
                     print ("---Success")
                 except Exception, a:
                     print a
