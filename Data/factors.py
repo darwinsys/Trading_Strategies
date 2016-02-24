@@ -334,7 +334,7 @@ class FactorFactory:
                 df_returns = pd.DataFrame()
                 df_returns['date'] = df_prices['tradeDate']
                 df_returns['ticker'] = ticker
-                df_returns['id'] = df_returns['ticker'] + df_returns['date']
+                df_returns['id'] = df_returns['ticker'] + '_' +  df_returns['date']
 
 
                 # price information
@@ -353,12 +353,18 @@ class FactorFactory:
                 df_returns['ret_cc_20'] = df_returns['close'] / df_returns['close'].shift(20) - 1
                 df_returns['ret_cc_60'] = df_returns['close'] / df_returns['close'].shift(60) - 1
 
-                df_returns.to_sql('Stock_Price', db_engine, if_exists='append')
-
+                try :
+                    print ("--- loading to db")
+                    df_returns.to_sql('Stock_Price', db_engine, if_exists='append')
+                    print ("---Success")
+                except:
+                    print "--- Failed"
+                    continue
 
 
         except Exception, e:
             raise e
+
 
     def calcFactor_EP(self, params):
         # 1. download the related data
