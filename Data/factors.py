@@ -307,7 +307,8 @@ class FactorFactory:
             # get mysql connection
             db_engine = self.settings.get_mysql_engine()
             metadata = MetaData()
-            tl_prices = Table('Stock_Price1', metadata,
+            tl_prices = Table('Stock_Price', metadata,
+                              Column('id', String(20), primary_key=True),
                               Column('date', String(10), nullable=False),
                               Column('ticker', String(10), nullable=False),
                               Column('open', Float),
@@ -333,6 +334,7 @@ class FactorFactory:
                 df_returns = pd.DataFrame()
                 df_returns['date'] = df_prices['tradeDate']
                 df_returns['ticker'] = ticker
+                df_returns['id'] = df_returns['ticker'] + df_returns['date']
 
 
                 # price information
@@ -351,7 +353,7 @@ class FactorFactory:
                 df_returns['ret_cc_20'] = df_returns['close'] / df_returns['close'].shift(20) - 1
                 df_returns['ret_cc_60'] = df_returns['close'] / df_returns['close'].shift(60) - 1
 
-                df_returns.to_sql('Stock_Price1', db_engine, if_exists='append')
+                df_returns.to_sql('Stock_Price', db_engine, if_exists='append')
 
 
 
