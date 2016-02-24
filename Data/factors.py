@@ -315,19 +315,20 @@ class FactorFactory:
 
                 df_returns = pd.DataFrame()
                 df_returns['date'] = df_prices['tradeDate']
-                df_returns.set_index('date', inplace=True)
+
 
                 # price information
                 df_returns['open'] = df_prices['openPrice'] * df_prices['accumAdjFactor']
                 df_returns['high'] = df_prices['highestPrice'] * df_prices['accumAdjFactor']
-                df_returns['low'] = df_prices['lowPrice'] * df_prices['accumAdjFactor']
+                df_returns['low'] = df_prices['lowestPrice'] * df_prices['accumAdjFactor']
                 df_returns['close'] = df_prices['closePrice'] * df_prices['accumAdjFactor']
                 df_returns['turnoverValue'] = df_prices['turnoverValue']
+                df_returns.set_index('date', inplace=True)
 
                 # return information
                 df_returns['ret_cc'] = df_returns['close'] / df_returns['close'].shift(1) - 1
                 df_returns['ret_cc_2'] = df_returns['close'] / df_returns['close'].shift(2) - 1
-                df_returns['ret_cc_5'] == df_returns['close'] / df_returns['close'].shift(5) - 1
+                df_returns['ret_cc_5'] = df_returns['close'] / df_returns['close'].shift(5) - 1
                 df_returns['ret_cc_10'] = df_returns['close'] / df_returns['close'].shift(10) - 1
                 df_returns['ret_cc_20'] = df_returns['close'] / df_returns['close'].shift(20) - 1
                 df_returns['ret_cc_60'] = df_returns['close'] / df_returns['close'].shift(60) - 1
