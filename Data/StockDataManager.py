@@ -405,7 +405,7 @@ class JobManager :
                     print ("--- loading to db")
                     df_returns.to_sql('Stock_Price', db_engine, index=True, if_exists='append')
                     print ("--- Deleting the old entries")
-                    #coll_eq_mkt.remove({'ticker': ticker})
+                    coll_eq_mkt.remove({'ticker': ticker})
                     #import odo
                     #odo.odo(df_returns, tl_prices )
                     print ("--- Success")
