@@ -73,6 +73,7 @@ class Settings :
     def get_sqlite_engine(self):
         if self._sqlite_engine is None:
             self._sqlite_engine = create_engine(Settings._sqlite_url, echo=True)
+        return self._sqlite_engine
 
     def get_mysql_engine(self):
         if self._mysql_engine is None :

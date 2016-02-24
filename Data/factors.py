@@ -3,7 +3,7 @@ import urllib
 import json
 import traceback
 import pandas as pd
-
+from sqlalchemy import *
 
 class Client:
     HTTP_OK = 200
@@ -305,16 +305,34 @@ class FactorFactory:
             coll_eq_mkt = self.settings.get_mongo_coll_equity_market()
 
             # get mysql connection
-            db_conn = self.settings.get_sqlite_engine()
+            db_engine = self.settings.get_mysql_engine()
+            metadata = MetaData()
+            tl_prices = Table('Stock_Price1', metadata,
+                              Column('date', String(10), nullable=False),
+                              Column('ticker', String(10), nullable=False),
+                              Column('open', Float),
+                              Column('high', Float),
+                              Column('low', Float),
+                              Column('close', Float),
+                              Column('turnoverValue', BigInteger),
+                              Column('ret_cc', Float),
+                              Column('ret_cc_2', Float),
+                              Column('ret_cc_5', Float),
+                              Column('ret_cc_10', Float),
+                              Column('ret_cc_20', Float),
+                              Column('ret_cc_60', Float))
+            metadata.create_all(db_engine)
             # get all the stock
             ids = coll_eq_mkt.distinct('ticker')
-            for ticker in ids:
+            for ticker in ids :
+                print('downloading {ticker}'.format(ticker=ticker))
                 query_prices = coll_eq_mkt.find({'ticker': ticker}).sort('tradeDate', 1)
 
                 df_prices = pd.DataFrame(list(query_prices))
 
                 df_returns = pd.DataFrame()
                 df_returns['date'] = df_prices['tradeDate']
+                df_returns['ticker'] = ticker
 
 
                 # price information
@@ -333,7 +351,7 @@ class FactorFactory:
                 df_returns['ret_cc_20'] = df_returns['close'] / df_returns['close'].shift(20) - 1
                 df_returns['ret_cc_60'] = df_returns['close'] / df_returns['close'].shift(60) - 1
 
-                df_returns.to_sql('price', db_conn, if_exists='append')
+                df_returns.to_sql('Stock_Price1', db_engine, if_exists='append')
 
 
 
