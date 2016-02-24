@@ -321,7 +321,14 @@ class FactorFactory:
                               Column('ret_cc_5', Float),
                               Column('ret_cc_10', Float),
                               Column('ret_cc_20', Float),
-                              Column('ret_cc_60', Float))
+                              Column('ret_cc_60', Float),
+                              Column('ma_2', Float),
+                              Column('ma_5', Float),
+                              Column('ma_10', Float),
+                              Column('ma_20', Float),
+                              Column('ma_60', Float),
+                              Column('ma_100', Float)
+                              )
             metadata.create_all(db_engine)
             # get all the stock
             ids = coll_eq_mkt.distinct('ticker')

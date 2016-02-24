@@ -351,6 +351,74 @@ class JobManager :
             print 'Failed'
             raise e
 
+
+    def task_UpdatePrice(self):
+        try:
+            coll_eq_mkt = self._settings.get_mongo_coll_equity_market()
+
+            # get mysql connection
+            db_engine = self._settings.get_mysql_engine()
+            metadata = MetaData(bind=db_engine)
+            tl_prices = Table('Stock_Price', metadata,
+                              Column('date', String(10), nullable=False),
+                              Column('ticker', String(10), nullable=False),
+                              Column('id', String(20), nullable=False),
+                              Column('open', Float),
+                              Column('high', Float),
+                              Column('low', Float),
+                              Column('close', Float),
+                              Column('turnoverValue', BigInteger),
+                              Column('turnoverRate', Float ),
+                              Column('marketValue', BigInteger),
+                              Column('negMarketValue', BigInteger))
+
+            metadata.create_all(db_engine)
+            # get all the stock
+            ids = coll_eq_mkt.distinct('ticker')
+            for ticker in ids :
+                print('downloading {ticker}'.format(ticker=ticker))
+                query_prices = coll_eq_mkt.find({'ticker': ticker}).sort('tradeDate', 1)
+
+                df_prices = pd.DataFrame(list(query_prices))
+
+                df_returns = pd.DataFrame()
+                df_returns['date'] = df_prices['tradeDate']
+                df_returns['ticker'] = ticker
+                df_returns['id'] = df_returns['ticker'] + '_' +  df_returns['date']
+
+
+                # price information
+                df_returns['open'] = df_prices['openPrice'] * df_prices['accumAdjFactor']
+                df_returns['high'] = df_prices['highestPrice'] * df_prices['accumAdjFactor']
+                df_returns['low'] = df_prices['lowestPrice'] * df_prices['accumAdjFactor']
+                df_returns['close'] = df_prices['closePrice'] * df_prices['accumAdjFactor']
+                df_returns['turnoverValue'] = df_prices['turnoverValue']
+                df_returns['turnoverRate'] = df_prices['turnoverRate']
+                df_returns['marketValue'] = df_prices['marketValue']
+                df_returns['negMarketValue'] = df_prices['negMarketValue']
+                #df_returns.set_index('date', inplace=True)
+
+                df_returns.set_index('date', inplace=True)
+                df_returns = df_returns.dropna()
+
+                try :
+                    print ("--- loading to db")
+                    df_returns.to_sql('Stock_Price', db_engine, index=True, if_exists='append')
+                    print ("--- Deleting the old entries")
+                    coll_eq_mkt.remove({'ticker': ticker})
+                    #import odo
+                    #odo.odo(df_returns, tl_prices )
+                    print ("--- Success")
+                except Exception, a:
+                    print a
+                    print "--- Failed"
+                    continue
+
+
+        except Exception, e:
+            raise e
+
+
     def process_job_download_stock_daily_price(self):
         while True:
             # jobs = mongo_coll_job.find_one({'status': 0})
@@ -527,4 +595,6 @@ if __name__ == '__main__' :
     ''' Test case 5:
     '''
     #jobmgr.task_UpdateIndexInfo()
-    jobmgr.task_UpdateIndexComponents()
+    #jobmgr.task_UpdateIndexComponents()
+
+    jobmgr.task_UpdatePrice()
