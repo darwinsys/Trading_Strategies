@@ -306,7 +306,7 @@ class FactorFactory:
 
             # get mysql connection
             db_engine = self.settings.get_mysql_engine()
-            metadata = MetaData()
+            metadata = MetaData(bind=db_engine)
             tl_prices = Table('Stock_Price', metadata,
                               Column('date', String(10), nullable=False),
                               Column('ticker', String(10), nullable=False),
@@ -343,7 +343,7 @@ class FactorFactory:
                 df_returns['low'] = df_prices['lowestPrice'] * df_prices['accumAdjFactor']
                 df_returns['close'] = df_prices['closePrice'] * df_prices['accumAdjFactor']
                 df_returns['turnoverValue'] = df_prices['turnoverValue']
-                df_returns.set_index('date', inplace=True)
+                #df_returns.set_index('date', inplace=True)
 
                 # return information
                 df_returns['ret_cc'] = df_returns['close'] / df_returns['close'].shift(1) - 1
@@ -353,11 +353,17 @@ class FactorFactory:
                 df_returns['ret_cc_20'] = df_returns['close'] / df_returns['close'].shift(20) - 1
                 df_returns['ret_cc_60'] = df_returns['close'] / df_returns['close'].shift(60) - 1
 
+                df_returns = df_returns.dropna()
+                #df_returns.set_index('date', inplace=True)
+
                 try :
                     print ("--- loading to db")
-                    df_returns.to_sql('Stock_Price', db_engine, if_exists='append')
+                    #df_returns.to_sql('Stock_Price', db_engine, index=True, if_exists='append')
+                    import odo
+                    odo.odo(df_returns, tl_prices )
                     print ("---Success")
-                except:
+                except Exception, a:
+                    print a
                     print "--- Failed"
                     continue
 
