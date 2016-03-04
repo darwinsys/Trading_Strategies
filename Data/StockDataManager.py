@@ -388,10 +388,10 @@ class JobManager :
 
 
                 # price information
-                df_returns['open'] = df_prices['openPrice'] * df_prices['accumAdjFactor']
-                df_returns['high'] = df_prices['highestPrice'] * df_prices['accumAdjFactor']
-                df_returns['low'] = df_prices['lowestPrice'] * df_prices['accumAdjFactor']
-                df_returns['close'] = df_prices['closePrice'] * df_prices['accumAdjFactor']
+                df_returns['open'] = df_prices['openPrice'] #* df_prices['accumAdjFactor']
+                df_returns['high'] = df_prices['highestPrice'] #* df_prices['accumAdjFactor']
+                df_returns['low'] = df_prices['lowestPrice'] #* df_prices['accumAdjFactor']
+                df_returns['close'] = df_prices['closePrice'] #* df_prices['accumAdjFactor']
                 df_returns['turnoverValue'] = df_prices['turnoverValue']
                 df_returns['turnoverRate'] = df_prices['turnoverRate']
                 df_returns['marketValue'] = df_prices['marketValue']
