@@ -4,6 +4,9 @@ import sqlalchemy as sa
 from sqlalchemy import select
 import pandas as pd
 import datetime
+from Data.StockDataManager import Settings
+import Quandl
+import json
 
 class TimeSeries :
     def __init__(self, settings):
@@ -49,7 +52,8 @@ class TimeSeries :
 
         return df_mkt
 
-def get_data_from_mongo(self):
+
+    def get_data_from_mongo(self):
         mongo_coll_price = self._settings.get_mongo_coll_price()
 
         df_prices = pd.DataFrame(list(mongo_coll_price.find()))
@@ -60,6 +64,77 @@ def get_data_from_mongo(self):
 
 
 
+    def store_ETF_data(self, tickers) :
+        settings = Settings()
+        db = settings.get_mongo_db(local=True)
+        coll = db['ETF']
+
+        for t in tickers:
+            print 'downloadng {t}'.format(t=t)
+            df = Quandl.get(t)
+            df['name'] = t
+            df = df.reset_index()
+            records = json.loads(df.T.to_json()).values()
+            print "uploading {t}".format(t=t)
+            coll.insert_many(records)
+
+    def get_ETF_data(self, tickers) :
+        data = {}
+        settings = Settings()
+        coll = settings.get_mongo_coll('ETF', local=True)
+
+        for t in tickers:
+            df = pd.DataFrame(list(coll.find({'name': t})))
+            df['Date'] = pd.to_datetime(df['Date'] * 1000 * 1000)
+            df['price'] = df['Close']
+            df['volume'] = df['Volume']
+            df = df.set_index('Date')
+            df = df.sort_index()
+            try :
+                df.index = df.index.tz_localize('UTC')
+            except :
+                df.index = df.index.tz_convert('UTC')
+
+            data[t] = df
+
+        return data
+
+    def get_agg_data(self, tickers) :
+        data = self.get_ETF_data(tickers)
+        df_prices = pd.DataFrame()
+        df_volume = pd.DataFrame()
+
+        dp = {}
+        for t in tickers:
+            df = pd.DataFrame()
+            df['open'] = data[t]['Open']
+            df['high'] = data[t]['High']
+            df['low'] = data[t]['Low']
+            df['close'] = data[t]['Close']
+            df['volume'] = data[t]['Volume']
+            df['price'] = df['close']
+
+            dp[t] = df
+            #df_prices[t] = data[t]['price']
+            #df_volume[t] = data[t]['volume']
+
+        #df_prices = df_prices.fillna(method='pad', axis=0)
+        #df_prices = df_prices.dropna()
+        #df_volume = df_volume.fillna(method='pad', axis=0)
+        #df_volume = df_volume.dropna()
+
+        # dp = {}
+        # for t in tickers:
+        #     df = pd.DataFrame()
+        #     df['price'] = df_prices[t]
+        #     df['volume'] = df_volume[t]
+        #     dp[t] = df
+        dp = pd.Panel(dp)
+
+        return dp
+
+
+
 ## testing
 if __name__ == '__main__' :
     settings = sdm.Settings()
@@ -67,4 +142,23 @@ if __name__ == '__main__' :
 
     #data = ts.get_stock_series(['300382', '603008'], start='2015-01-01', fields=['open', 'close'])
     #data1 = ts.get_stock_series(['300382', '603008'], start='2015-01-01')
-    data = ts.get_equity_market_values()
+    #data = ts.get_equity_market_values()
+
+    tickers = ['GOOG/NYSE_SPY', #S&P 500 ETF
+            'GOOG/AMEX_EWJ', # iShares MSCI Japan ETF
+            'GOOG/NYSE_IEV', # iShares Europe ETF
+            'GOOG/NYSE_VWO', # Vanguard Emerging Market Stock ETF
+
+            #'GOOG/NYSE_VNQ', # Vanguard MSCI US Reits
+            'GOOG/NYSE_IYR', # iShares U.S. Real Estate ETF
+            'GOOG/NYSE_RWX', # SPDR DJ Wilshire Intl Real Estate ETF
+
+            'GOOG/NYSEARCA_TLT',  # 20 Years Treasury ETF
+            'GOOG/NYSEARCA_TLH',  # 15-20 Years Treasury
+
+            'GOOG/AMEX_GSG', # GSCI Commodity-Indexed Trust Fund
+            'GOOG/NYSEARCA_GLD',  # SPDR Gold ETF
+
+            ]
+
+    dp = ts.get_agg_data(tickers)

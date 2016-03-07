@@ -61,14 +61,19 @@ class Settings :
         self._mongo_conn = self.get_mongo_conn()
         self._local_mongo_db = self.get_mongo_db()
 
-    def get_mongo_conn(self):
-        if self._mongo_conn is None:
+    def get_mongo_conn(self, local=False):
+        if local == False:
             self._mongo_conn = pymongo.MongoClient(self._mongo_hostname, self._mongo_port)
-        return self._mongo_conn
+        else :
+            self._mongo_conn = pymongo.MongoClient('localhost', self._mongo_port)
 
-    def get_mongo_db(self):
-        self.get_mongo_conn()
+
+
+    def get_mongo_db(self, local=False):
+        self.get_mongo_conn(local)
         return self._mongo_conn[self._mongo_db_name]
+
+
 
     def get_sqlite_engine(self):
         if self._sqlite_engine is None:
@@ -124,9 +129,11 @@ class Settings :
     def get_mongo_coll_index_components(self):
         return self.get_mongo_coll(self.MONGO_COLL_Rawdata_Index_Components)
 
-    def get_mongo_coll(self, name_coll):
-        mongo_db = self.get_mongo_db()
-        return mongo_db[name_coll]
+    def get_mongo_coll(self, name_coll, local=False):
+        mongo_db = self.get_mongo_db(local)
+        mongo_coll = mongo_db[name_coll]
+
+        return mongo_coll
 
 
 
