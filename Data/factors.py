@@ -85,6 +85,7 @@ class FactorFactory:
     form_funda_is = '/api/fundamental/getFdmtIS.json'
     form_mkt_eq = '/api/market/getMktEqud.json'
     form_mkt_factor_oneday = '/api/market/getStockFactorsOneDay.json'
+    form_mkt_index = '/api/market/getMktIdxd.json'
     form_master_cal = '/api/master/getTradeCal.json'
     form_index_info = '/api/idx/getIdx.json'
     form_index_components = '/api/idx/getIdxCons.json'
@@ -236,9 +237,46 @@ class FactorFactory:
         except Exception, e:
             raise e
 
+    '''
+    Historical market data from DataYes for chinese stockm market
+    '''
     def getMarketEquity(self, params):
         try:
             form = self.form_mkt_eq
+            beginDate = params.get('beginDate')
+            beginDate = '' if beginDate is None else beginDate
+            endDate = params.get('endDate')
+            endDate = '' if endDate is None else endDate
+            field = params.get('field')
+            field = '' if field is None else field
+            secID = params.get('secID')
+            secID = '' if secID is None else secID
+            ticker = params.get('ticker')
+            ticker = '' if ticker is None else ticker
+            tradeDate = params.get('tradeDate')
+            tradeDate = '' if tradeDate is None else tradeDate
+
+            ### downloading data
+            url1 = '{form}?field={field}&beginDate={beginDate}&endDate={endDate}&secID={secID}&ticker={ticker}&tradeDate={tradeDate}' \
+                .format(form=form, field=field, beginDate=beginDate, endDate=endDate, secID=secID, ticker=ticker,
+                        tradeDate=tradeDate)
+            print url1
+
+            code, result = self.client.getData(url1)
+            if code == 200:
+                result = json.loads(result)
+                output = pd.DataFrame(result['data'])
+                return output
+            else:
+                print code
+                print result
+                return None
+        except Exception, e:
+            raise e
+
+    def getMarketIndex(self, params):
+        try:
+            form = self.form_mkt_index
             beginDate = params.get('beginDate')
             beginDate = '' if beginDate is None else beginDate
             endDate = params.get('endDate')
@@ -433,9 +471,10 @@ if __name__ == '__main__':
     ff = FactorFactory()
 
     params = {}
-    params['ticker'] = '000001'
-    params['beginDate'] = datetime.strptime('20080101', '%Y%m%d')
+    params['ticker'] = '000905' # zhongzheng 500 ETF
+    # params['beginDate'] = datetime.strptime('20080101', '%Y%m%d')
     # params['endDate'] = datetime.today()
+    pd_etf = ff.getMarketIndex(params)
 
     # ep = ff.calcFactor_EP( params)
     # print ep.columns

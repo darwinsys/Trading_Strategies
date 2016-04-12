@@ -45,8 +45,8 @@ class Settings :
     _mongo_collection_stock_info = "Stock_info"
 
     MONGO_COLL_Rawdata_Equity_Fundamental_IS = "RAW_Equity_IncomeStatment"
-    MONGO_COLL_Rawdata_Equity_Market = "RAW_Equity_Market"
-    MONGO_COLL_Rawdata_Equity_Factors = "RAW_Equity_Factors"
+    MONGO_COLL_Rawdata_Equity_Market = "StockPrices"
+    MONGO_COLL_Rawdata_Equity_Factors = "StockFactors"
     MONGO_COLL_Rawdata_Index_Information = "RAW_Index_Information"
     MONGO_COLL_Rawdata_Index_Components = "RAW_Index_Components"
 
@@ -59,7 +59,7 @@ class Settings :
 
     def __init__(self):
         self._mongo_conn = self.get_mongo_conn()
-        self._local_mongo_db = self.get_mongo_db()
+        #self._local_mongo_db = self.get_mongo_db()
 
     def get_mongo_conn(self, local=False):
         if local == False:
@@ -73,7 +73,9 @@ class Settings :
         self.get_mongo_conn(local)
         return self._mongo_conn[self._mongo_db_name]
 
-
+    def get_mongo_db(self, name_db, local=False):
+        self.get_mongo_conn(local)
+        return self._mongo_conn[name_db]
 
     def get_sqlite_engine(self):
         if self._sqlite_engine is None:
@@ -104,6 +106,7 @@ class Settings :
     def get_mongo_coll_job(self):
         return self.get_mongo_coll(self.MONGO_COLL_Job_Daily)
 
+
     def get_mongo_coll_price_tmp(self):
         return self.get_mongo_coll(self._mongo_collection_stock_daily_price_tmp)
 
@@ -129,10 +132,15 @@ class Settings :
     def get_mongo_coll_index_components(self):
         return self.get_mongo_coll(self.MONGO_COLL_Rawdata_Index_Components)
 
-    def get_mongo_coll(self, name_coll, local=False):
+    def get_mongo_coll(self, name_coll, local=True):
         mongo_db = self.get_mongo_db(local)
         mongo_coll = mongo_db[name_coll]
 
+        return mongo_coll
+
+    def get_mongo_coll(self, name_coll, name_db, local=True):
+        mongo_db = self.get_mongo_db(name_db, local)
+        mongo_coll = mongo_db[name_coll]
         return mongo_coll
 
 
@@ -211,18 +219,27 @@ class JobManager :
         self._taskmanager = TaskManager(settings)
         self._factorfactory = factors.FactorFactory()
 
-    def processJob_DownloadEquityMktByDate(self):
+    def processJob_DownloadEquityMktByDate(self, db):
+        coll_job = db[self._settings.MONGO_COLL_Job_Daily]
+        coll_market = db[self._settings.MONGO_COLL_Rawdata_Equity_Market]
         while True:
-            jobs = self._settings.get_mongo_coll_job().find_one({'status':self.JOB_STATUS_READY, \
-                'task':self.TASK_DOWNLOAD_MARKET_EQUITY_BYDATE})
-            if jobs is None:
+            job = coll_job.find_one({'status':self.JOB_STATUS_READY, 'task':self.TASK_DOWNLOAD_MARKET_EQUITY_BYDATE})
+            if job is None:
                 print 'No more job to process'
                 return
 
+            # check whether jobs with the same tradeDate, task and done successfully exists
+            exist_jobs = coll_job.find_one({'task':self.TASK_DOWNLOAD_MARKET_EQUITY_BYDATE,
+                        'status':self.JOB_STATUS_SUCCESS, 'tradeDate':job['tradeDate']})
+            if exist_jobs is not None:
+                print 'The job {td} has done before: Next'.format(td=job['tradeDate'])
+                self.remove_job(coll_job, jobid)
+                continue
+
             n_trials = 0
             while True:
-                jobid = jobs['_id']
-                tradeDate = datetime.strptime(jobs['tradeDate'], '%Y-%m-%d').strftime('%Y%m%d')
+                jobid = job['_id']
+                tradeDate = datetime.strptime(job['tradeDate'], '%Y-%m-%d').strftime('%Y%m%d')
 
                 params = {}
                 params['tradeDate'] = tradeDate
@@ -232,33 +249,49 @@ class JobManager :
                     df_mk = self._factorfactory.getMarketEquity(params)
                     print 'Uploading to Mongo Server\n'
                     records = json.loads(df_mk.T.to_json()).values()
-                    self._settings.get_mongo_coll_equity_market().insert(records)
+                    coll_market.insert(records)
 
                     print "Success"
-                    self.update_job_status(jobid, self.JOB_STATUS_SUCCESS)
+                    self.update_job_status(coll_job, jobid, self.JOB_STATUS_SUCCESS)
                     break
                 except:
                     print "Failed"
-                    self.update_job_retry(jobid, n_trials)
+                    self.update_job_retry(coll_job, jobid, n_trials)
                     n_trials = n_trials + 1
                     if n_trials > self._settings.MAX_DOWNLOAD_TRIALS:
-                        self.update_job_status(jobid, self.JOB_STATUS_FAILED)
+                        self.update_job_status(coll_job, jobid, self.JOB_STATUS_FAILED)
                         break
 
         pass
 
-    def processJob_DownloadStockFactorByDate(self):
+
+
+    def processJob_DownloadStockFactorByDate_TL(self, db):
+        coll_job = db[self._settings.MONGO_COLL_Job_Daily]
+        coll_factor = db[self._settings.MONGO_COLL_Rawdata_Equity_Factors]
         while True:
-            jobs = self._settings.get_mongo_coll_job().find_one({'status':self.JOB_STATUS_READY, \
-                'task':self.TASK_DOWNLOAD_EQUITY_FACTOR_BYDATE})
-            if jobs is None:
+            job = coll_job.find_one({'status':self.JOB_STATUS_READY, \
+                'task':self.TASK_DOWNLOAD_EQUITY_FACTOR_BYDATE}) # download job which is ready to process
+            jobid = job['_id']
+            
+            # no more job to process. exit
+            if job is None:
                 print 'No more job to process'
                 return
 
+            # check whether jobs with the same tradeDate, task and done successfully exists
+            exist_jobs = coll_job.find_one({'task':self.TASK_DOWNLOAD_EQUITY_FACTOR_BYDATE,
+                        'status':self.JOB_STATUS_SUCCESS, 'tradeDate':job['tradeDate']})
+            if exist_jobs is not None:
+                print 'The job {td} has done before: Next'.format(td=job['tradeDate'])
+                self.remove_job(coll_job, jobid)
+                continue
+
+            # ready to process
             n_trials = 0
             while True:
-                jobid = jobs['_id']
-                tradeDate = datetime.strptime(jobs['tradeDate'], '%Y-%m-%d').strftime('%Y%m%d')
+                
+                tradeDate = datetime.strptime(job['tradeDate'], '%Y-%m-%d').strftime('%Y%m%d')
 
                 params = {}
                 params['tradeDate'] = tradeDate
@@ -268,17 +301,17 @@ class JobManager :
                     df_mk = self._factorfactory.getStockFactors(params)
                     print 'Uploading to Mongo Server\n'
                     records = json.loads(df_mk.T.to_json()).values()
-                    self._settings.get_mongo_coll_eq_factors().insert(records)
+                    coll_factor.insert(records)
 
                     print "Success"
-                    self.update_job_status(jobid, self.JOB_STATUS_SUCCESS)
+                    self.update_job_status(coll_job, jobid, self.JOB_STATUS_SUCCESS)
                     break
                 except:
                     print "Failed"
-                    self.update_job_retry(jobid, n_trials)
+                    self.update_job_retry(coll_job, jobid, n_trials)
                     n_trials = n_trials + 1
                     if n_trials > self._settings.MAX_DOWNLOAD_TRIALS:
-                        self.update_job_status(jobid, self.JOB_STATUS_FAILED)
+                        self.update_job_status(coll_job, jobid, self.JOB_STATUS_FAILED)
                         break
 
         pass
@@ -357,6 +390,7 @@ class JobManager :
         except Exception, e:
             print 'Failed'
             raise e
+
 
 
     def task_UpdatePrice(self):
@@ -456,19 +490,20 @@ class JobManager :
                     continue
                     # self._mongo_coll.find_one_and_update({"_id":jobid}, {"$set": {"status": 2}}
 
-    def restart_failed_jobs(self):
-        result = self._settings.get_mongo_coll_job().update_many({'status':self.JOB_STATUS_FAILED}, \
+    def restart_failed_jobs(self, mongo_coll_jobs):
+        result = mongo_coll_jobs.update_many({'status':self.JOB_STATUS_FAILED}, \
             {'$set':{'status':self.JOB_STATUS_READY}})
         print 'success '
 
 
-    def update_job_status(self, job_id, status):
-        mongo_coll_jobs = self._settings.get_mongo_coll_job()
+    def update_job_status(self, mongo_coll_jobs, job_id, status):
         mongo_coll_jobs.find_one_and_update({"_id": job_id}, {"$set": {"status": status}})
 
-    def update_job_retry(self, job_id, retries):
-        mongo_coll_jobs = self._settings.get_mongo_coll_job()
+    def update_job_retry(self, mongo_coll_jobs, job_id, retries):
         mongo_coll_jobs.find_one_and_update({"_id": job_id}, {"$set": {"retry": retries}})
+
+    def remove_job(self, mongo_coll_jobs, job_id):
+        mongo_coll_jobs.remove({"_id": job_id})
 
     def get_all_stock_info(self):
         mongo_coll = self._settings.get_mongo_coll_info()
@@ -539,7 +574,9 @@ class JobManager :
         mongo_coll_jobs.insert(records)
 
     def addJob_DownloadStockFactorByDate(self, start=None, end=None):
-        mongo_coll_jobs = self._settings.get_mongo_coll_job()
+        db = self._settings.get_mongo_db('chinese_market', local=True)  # get mongo db
+        coll_job = db[self._settings.MONGO_COLL_Job_Daily]
+
         jobs = pd.DataFrame()
 
         if end is None:
@@ -556,7 +593,7 @@ class JobManager :
         jobs['retry'] = 0
 
         records = json.loads(jobs.T.to_json()).values()
-        mongo_coll_jobs.insert(records)
+        coll_job.insert(records)
 
     def get_data_from_mongo(self):
         mongo_coll_price = self._settings.get_mongo_coll_price()
@@ -580,9 +617,9 @@ if __name__ == '__main__' :
 
     ''' Test case 1:
     '''
-    #jobmgr.restart_failed_jobs()
-    #jobmgr.add_download_jobs('2016-01-01')
-    #jobmgr.process_job_download_stock_daily_price()
+    #
+    # jobmgr.add_download_jobs('2016-01-01')
+    # jobmgr.process_job_download_stock_daily_price()
 
     ''' Test case 2:
     '''
@@ -591,17 +628,18 @@ if __name__ == '__main__' :
 
     ''' Test case 3:
     '''
-    #jobmgr.addJob_DownloadEquityMktByDate(start='20140101')
-    #jobmgr.processJob_DownloadEquityMktByDate()
+    # jobmgr.restart_failed_jobs()
+    #jobmgr.addJob_DownloadEquityMktByDate(start='20150101', end='20151231')
+    # jobmgr.processJob_DownloadEquityMktByDate()
 
     ''' Test case 4:
     '''
-    #jobmgr.addJob_DownloadStockFactorByDate(start='20080101', end='20151231')
-    #jobmgr.processJob_DownloadStockFactorByDate()
+    jobmgr.addJob_DownloadStockFactorByDate(start='20150101') #, end='20151231')
+    jobmgr.processJob_DownloadStockFactorByDate_TL()
 
     ''' Test case 5:
     '''
     #jobmgr.task_UpdateIndexInfo()
     #jobmgr.task_UpdateIndexComponents()
 
-    jobmgr.task_UpdatePrice()
+    #jobmgr.task_UpdatePrice()

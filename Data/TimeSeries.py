@@ -7,10 +7,24 @@ import datetime
 from Data.StockDataManager import Settings
 import Quandl
 import json
+import numpy as np
 
 class TimeSeries :
     def __init__(self, settings):
         self._settings = settings
+
+    '''
+    Filtering - filter the dataframe with a given period. The down-sampled value will be the last value in the list
+    '''
+    def filtering(self, data, f) :
+        data1 = data.copy()
+        for i in range(len(data1)) :
+            if i%f == 0:
+                #print i
+                continue
+            data1.iloc[i, :] = np.NAN
+        return data1.dropna()
+
 
     def get_stock_series(self, codes, start, end=None, fields=None):
         tl_price = self._settings.get_mysql_table(self._settings._table_price)
@@ -66,25 +80,97 @@ class TimeSeries :
 
     def store_ETF_data(self, tickers) :
         settings = Settings()
-        db = settings.get_mongo_db(local=True)
+        db = settings.get_mongo_db('Global', local=True)
         coll = db['ETF']
 
         for t in tickers:
+            # find the ticker
+            dates = coll.find_one({'name':t}, sort=[('Date', -1)])
+            if (dates is None):
+                print 'max_date is none'
+                mdate = None
+            else :
+                mdate = pd.to_datetime(dates['Date']*1000*1000).strftime(format='%Y-%m-%d')
+
+
             print 'downloadng {t}'.format(t=t)
-            df = Quandl.get(t)
+            df = Quandl.get(t, trim_start=mdate)
             df['name'] = t
             df = df.reset_index()
-            records = json.loads(df.T.to_json()).values()
+
+            if mdate is None :
+                df_a = df
+            else :
+                df_a = df[df['Date'] > mdate]
+
+            if len(df_a) == 0:
+                print "data for {ticker} is already updated till {date}".format(ticker=t, date=mdate)
+                continue
+            records = json.loads(df_a.T.to_json()).values()
+            #print records
             print "uploading {t}".format(t=t)
             coll.insert_many(records)
+
+    def store_Stock_data(self, tickers):
+        settings = Settings()
+        db = settings.get_mongo_db(local=True)
+        coll = db['Stock']
+
+        for t in tickers:
+
+            # find the ticker
+            dates = coll.find_one({'name':t}, sort=[('Date', -1)])
+            if (dates is None):
+                print 'max_date is none'
+                mdate = None
+            else :
+                mdate = pd.to_datetime(dates['Date']*1000*1000).strftime(format='%Y-%m-%d')
+                print 'downloadng {t}'.format(t=t)
+
+
+            df = Quandl.get(t, trim_start=mdate)
+            df = df.reset_index()
+
+
+            if mdate is None :
+                df_a = df
+            else :
+                df_a = df[df['Date'] > mdate]
+
+            if len(df_a) == 0:
+                print "data for {ticker} is already updated till {date}".format(ticker=t, date=mdate)
+                continue
+
+            df_adj = pd.DataFrame()
+            df_adj['Date'] = df_a['Date']
+            df_adj['Open'] = df_a['Adj. Open']
+            df_adj['High'] = df_a['Adj. High']
+            df_adj['Low'] = df_a['Adj. Low']
+            df_adj['Close'] = df_a['Adj. Close']
+            df_adj['Volume'] = df_a['Adj. Volume']
+            df_adj['name'] = t
+
+            records = json.loads(df_adj.T.to_json()).values()
+            # #print records
+            print "uploading {t}".format(t=t)
+            coll.insert_many(records)
+
+
+
+
 
     def get_ETF_data(self, tickers) :
         data = {}
         settings = Settings()
-        coll = settings.get_mongo_coll('ETF', local=True)
+        coll = settings.get_mongo_coll('ETF', 'Global', local=True)
 
         for t in tickers:
-            df = pd.DataFrame(list(coll.find({'name': t})))
+            l = list(coll.find({'name':t}))
+            if l == []:
+                print 'ticker {t} cannot be found'.format(t=t)
+                continue
+
+            df = pd.DataFrame(l)
             df['Date'] = pd.to_datetime(df['Date'] * 1000 * 1000)
             df['price'] = df['Close']
             df['volume'] = df['Volume']
@@ -99,13 +185,17 @@ class TimeSeries :
 
         return data
 
-    def get_agg_data(self, tickers) :
+    def get_agg_ETF_data(self, tickers) :
         data = self.get_ETF_data(tickers)
+        if data == {} :
+            print "cannot find all the tickers. Return"
+            return None
+
         df_prices = pd.DataFrame()
         df_volume = pd.DataFrame()
 
         dp = {}
-        for t in tickers:
+        for t in data.keys():
             df = pd.DataFrame()
             df['open'] = data[t]['Open']
             df['high'] = data[t]['High']
@@ -113,6 +203,12 @@ class TimeSeries :
             df['close'] = data[t]['Close']
             df['volume'] = data[t]['Volume']
             df['price'] = df['close']
+
+
+            try :
+                df.index = df.index.tz_localize('UTC')
+            except :
+                df.index = df.index.tz_convert('UTC')
 
             dp[t] = df
             #df_prices[t] = data[t]['price']
@@ -134,6 +230,79 @@ class TimeSeries :
         return dp
 
 
+
+    def store_Fred_data(self, tickers):
+        settings = Settings()
+        db = settings.get_mongo_db(local=True)
+        coll = db['Fred']
+
+        for t in tickers:
+
+            # find the ticker
+            dates = coll.find_one({'name':t}, sort=[('Date', -1)])
+            if (dates is None):
+                print 'max_date is none'
+                mdate = None
+            else :
+                mdate = pd.to_datetime(dates['Date']*1000*1000).strftime(format='%Y-%m-%d')
+
+            print 'downloadng {t}'.format(t=t)
+
+
+            df = Quandl.get(t, trim_start=mdate, authtoken='AuFngLLqDpLf672K9W85')
+            df = df.reset_index()
+
+
+            if mdate is None :
+                df_a = df
+            else :
+                df_a = df[df['Date'] > mdate]
+
+            if len(df_a) == 0:
+                print "data for {ticker} is already updated till {date}".format(ticker=t, date=mdate)
+                continue
+
+            df_adj = pd.DataFrame()
+            df_adj['Date'] = df_a['DATE']
+            df_adj['Value'] = df_a['VALUE']
+            df_adj['name'] = t
+
+            records = json.loads(df_adj.T.to_json()).values()
+            # #print records
+            print "uploading {t}".format(t=t)
+            coll.insert_many(records)
+
+    def get_Fred_data(self, tickers) :
+            data = {}
+            settings = Settings()
+            coll = settings.get_mongo_coll('Fred', local=True)
+
+            for t in tickers:
+                df = pd.DataFrame(list(coll.find({'name': t})))
+                df['Date'] = pd.to_datetime(df['Date'] * 1000 * 1000)
+                df = df.set_index('Date')
+                df = df.sort_index()
+                try :
+                    df.index = df.index.tz_localize('UTC')
+                except :
+                    df.index = df.index.tz_convert('UTC')
+
+                data[t] = df
+
+            return data
+
+    def get_agg_Fred_data(self, tickers) :
+        data = self.get_Fred_data(tickers)
+
+        dp = {}
+        for t in tickers:
+            df = pd.DataFrame()
+            df['value'] = data[t]['Value']
+            dp[t] = df
+
+        dp = pd.Panel(dp)
+
+        return dp
 
 ## testing
 if __name__ == '__main__' :
@@ -161,4 +330,5 @@ if __name__ == '__main__' :
 
             ]
 
-    dp = ts.get_agg_data(tickers)
+    # dp = ts.get_agg_data(tickers)
+    dp = ts.get_agg_ETF_data(tickers + ['test'])
