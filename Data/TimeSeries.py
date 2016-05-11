@@ -80,7 +80,7 @@ class TimeSeries :
 
     def store_ETF_data(self, tickers) :
         settings = Settings()
-        db = settings.get_mongo_db('Global', local=True)
+        db = settings.get_mongo_db('Quandl', local=True)
         coll = db['ETF']
 
         for t in tickers:
@@ -113,7 +113,7 @@ class TimeSeries :
 
     def store_Stock_data(self, tickers):
         settings = Settings()
-        db = settings.get_mongo_db(local=True)
+        db = settings.get_mongo_db('Quandl', local=True)
         coll = db['Stock']
 
         for t in tickers:
@@ -127,10 +127,12 @@ class TimeSeries :
                 mdate = pd.to_datetime(dates['Date']*1000*1000).strftime(format='%Y-%m-%d')
                 print 'downloadng {t}'.format(t=t)
 
-
-            df = Quandl.get(t, trim_start=mdate)
-            df = df.reset_index()
-
+            try:
+                df = Quandl.get(t, trim_start=mdate)
+                df = df.reset_index()
+            except:
+                print 'cannot download {n}'.format(n=t)
+                continue
 
             if mdate is None :
                 df_a = df
@@ -157,12 +159,36 @@ class TimeSeries :
 
 
 
+    def get_stock_data(self, tickers) :
+        data = {}
+        settings = Settings()
+        coll = settings.get_mongo_coll('Stock', 'Quandl', local=True)
 
+        for t in tickers:
+            l = list(coll.find({'name':t}))
+            if l == []:
+                print 'ticker {t} cannot be found'.format(t=t)
+                continue
+
+            df = pd.DataFrame(l)
+            df['Date'] = pd.to_datetime(df['Date'] * 1000 * 1000)
+            df['price'] = df['Close']
+            df['volume'] = df['Volume']
+            df = df.set_index('Date')
+            df = df.sort_index()
+            try :
+                df.index = df.index.tz_localize('UTC')
+            except :
+                df.index = df.index.tz_convert('UTC')
+
+            data[t] = df
+
+        return data
 
     def get_ETF_data(self, tickers) :
         data = {}
         settings = Settings()
-        coll = settings.get_mongo_coll('ETF', 'Global', local=True)
+        coll = settings.get_mongo_coll('ETF', 'Quandl', local=True)
 
         for t in tickers:
             l = list(coll.find({'name':t}))
@@ -318,7 +344,7 @@ if __name__ == '__main__' :
             'GOOG/NYSE_IEV', # iShares Europe ETF
             'GOOG/NYSE_VWO', # Vanguard Emerging Market Stock ETF
 
-            #'GOOG/NYSE_VNQ', # Vanguard MSCI US Reits
+            'GOOG/NYSE_VNQ', # Vanguard MSCI US Reits
             'GOOG/NYSE_IYR', # iShares U.S. Real Estate ETF
             'GOOG/NYSE_RWX', # SPDR DJ Wilshire Intl Real Estate ETF
 
@@ -326,9 +352,25 @@ if __name__ == '__main__' :
             'GOOG/NYSEARCA_TLH',  # 15-20 Years Treasury
 
             'GOOG/AMEX_GSG', # GSCI Commodity-Indexed Trust Fund
-            'GOOG/NYSEARCA_GLD',  # SPDR Gold ETF
+            #'GOOG/NYSEARCA_GLD',  # SPDR Gold ETF
 
+            'GOOG/NYSE_GDX', # gold
+            'GOOG/nyse_USO', # oil
+            'GOOG/NYSE_XLE',
+            'GOOG/NYSE_XLF',
+            'GOOG/NYSE_XLK',
+
+            'GOOG/NYSEARCA_VXX',
+            'GOOG/NYSEARCA_XIV',
+
+            'GOOG/NYSEARCA_EEM',
+            'GOOG/NYSEARCA_EWJ'
             ]
 
     # dp = ts.get_agg_data(tickers)
-    dp = ts.get_agg_ETF_data(tickers + ['test'])
+    # dp = ts.get_agg_ETF_data(tickers + ['test'])
+
+    stock_tickers = pd.read_csv('../ETF/SP500.csv')
+
+    ts.store_Stock_data(stock_tickers['free_code'].values)
+    # ts.store_ETF_data(tickers)

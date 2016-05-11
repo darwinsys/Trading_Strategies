@@ -219,7 +219,8 @@ class JobManager :
         self._taskmanager = TaskManager(settings)
         self._factorfactory = factors.FactorFactory()
 
-    def processJob_DownloadEquityMktByDate(self, db):
+    def processJob_DownloadEquityMktByDate(self):
+        db = self._settings.get_mongo_db('chinese_market', local=True)  # get mongo db
         coll_job = db[self._settings.MONGO_COLL_Job_Daily]
         coll_market = db[self._settings.MONGO_COLL_Rawdata_Equity_Market]
         while True:
@@ -227,6 +228,8 @@ class JobManager :
             if job is None:
                 print 'No more job to process'
                 return
+
+            jobid = job['_id']
 
             # check whether jobs with the same tradeDate, task and done successfully exists
             exist_jobs = coll_job.find_one({'task':self.TASK_DOWNLOAD_MARKET_EQUITY_BYDATE,
@@ -272,12 +275,14 @@ class JobManager :
         while True:
             job = coll_job.find_one({'status':self.JOB_STATUS_READY, \
                 'task':self.TASK_DOWNLOAD_EQUITY_FACTOR_BYDATE}) # download job which is ready to process
-            jobid = job['_id']
+
             
             # no more job to process. exit
             if job is None:
                 print 'No more job to process'
                 return
+
+            jobid = job['_id']
 
             # check whether jobs with the same tradeDate, task and done successfully exists
             exist_jobs = coll_job.find_one({'task':self.TASK_DOWNLOAD_EQUITY_FACTOR_BYDATE,
@@ -490,8 +495,10 @@ class JobManager :
                     continue
                     # self._mongo_coll.find_one_and_update({"_id":jobid}, {"$set": {"status": 2}}
 
-    def restart_failed_jobs(self, mongo_coll_jobs):
-        result = mongo_coll_jobs.update_many({'status':self.JOB_STATUS_FAILED}, \
+    def restart_failed_jobs(self):
+        db = self._settings.get_mongo_db('chinese_market', local=True)  # get mongo db
+        coll_job = db[self._settings.MONGO_COLL_Job_Daily]
+        result = coll_job.update_many({'status':self.JOB_STATUS_FAILED}, \
             {'$set':{'status':self.JOB_STATUS_READY}})
         print 'success '
 
@@ -554,7 +561,9 @@ class JobManager :
 
 
     def addJob_DownloadEquityMktByDate(self, start=None, end=None):
-        mongo_coll_jobs = self._settings.get_mongo_coll_job()
+        db = self._settings.get_mongo_db('chinese_market', local=True)  # get mongo db
+        coll_job = db[self._settings.MONGO_COLL_Job_Daily]
+
         jobs = pd.DataFrame()
 
         if end is None:
@@ -571,7 +580,7 @@ class JobManager :
         jobs['retry'] = 0
 
         records = json.loads(jobs.T.to_json()).values()
-        mongo_coll_jobs.insert(records)
+        coll_job.insert(records)
 
     def addJob_DownloadStockFactorByDate(self, start=None, end=None):
         db = self._settings.get_mongo_db('chinese_market', local=True)  # get mongo db
@@ -595,7 +604,7 @@ class JobManager :
         records = json.loads(jobs.T.to_json()).values()
         coll_job.insert(records)
 
-    def get_data_from_mongo(self):
+    def get_price_from_mongo(self, db):
         mongo_coll_price = self._settings.get_mongo_coll_price()
 
         df_prices = pd.DataFrame(list(mongo_coll_price.find()))
@@ -608,7 +617,17 @@ class JobManager :
         # todo
         pass
 
+class ChineseDataTools :
+    db_name = 'chinese_market'
 
+
+    def __init(self, settings):
+        self.settings = settings
+        self.db = self.settings.get_mongo_db(self.db_name, local=True)
+
+    def getAllTickers(self):
+        coll_prices = self.db[self.settings.MONGO_COLL_Rawdata_Equity_Market]
+        coll_prices.find_all({})
 
 ## testing
 if __name__ == '__main__' :
@@ -628,14 +647,15 @@ if __name__ == '__main__' :
 
     ''' Test case 3:
     '''
-    # jobmgr.restart_failed_jobs()
-    #jobmgr.addJob_DownloadEquityMktByDate(start='20150101', end='20151231')
-    # jobmgr.processJob_DownloadEquityMktByDate()
+    jobmgr.restart_failed_jobs()
+    #jobmgr.addJob_DownloadEquityMktByDate(start='20100101') #, end='20151231')
+    jobmgr.processJob_DownloadEquityMktByDate()
 
     ''' Test case 4:
     '''
-    jobmgr.addJob_DownloadStockFactorByDate(start='20150101') #, end='20151231')
-    jobmgr.processJob_DownloadStockFactorByDate_TL()
+    #jobmgr.addJob_DownloadStockFactorByDate(start='20100101') #, end='20151231')
+    mongo_db = settings.get_mongo_db("chinese_market", True)
+    jobmgr.processJob_DownloadStockFactorByDate_TL(mongo_db)
 
     ''' Test case 5:
     '''

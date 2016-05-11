@@ -3,7 +3,7 @@ import pandas as pd
 import talib as ta
 import math
 from Features import *
-
+from sklearn.metrics import fbeta_score
 
 '''
 calcualte the open-to-open log return ,
@@ -24,6 +24,9 @@ def target_direction(df, len=1) :
     df_dir = df_dir.shift(-1)
     return pd.DataFrame(data=df_dir.values, index=df.index, columns=['t_direction_{n}'.format(n=len)])
 
+def target_valley_top(df, len=100) :
+    vall
+
 
 '''
 Open-to-open log return , standardized by ATR
@@ -31,7 +34,7 @@ Open-to-open log return , standardized by ATR
 def log_return_std_by_atr(df, atrLen = 30) :
     df_logret = log_return(df)
 
-    df_atr = atr
+    df_atr = ATR
 
 def next_day_atr_return_distance(df, win=250):
     delta_o = np.array(df['open'].shift(-2) - df['open'].shift(-1))
